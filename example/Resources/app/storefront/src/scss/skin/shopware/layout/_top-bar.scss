@@ -1,0 +1,50 @@
+/*
+Top bar
+==================================================
+Contains skin styles for the top bar located at the top of the page.
+The top bar contains e.g. the language switcher, the currency switcher and the service menu.
+*/
+
+.top-bar-nav-btn.btn {
+    color: $body-color;
+    font-weight: $font-weight-normal;
+    padding: 0;
+
+    &:hover {
+        &,
+        .icon {
+            color: $primary;
+        }
+    }
+
+    &:focus {
+        box-shadow: none;
+    }
+}
+
+.dropdown.show {
+    .top-bar-nav-btn {
+        &,
+        .icon {
+            color: $primary;
+        }
+    }
+}
+
+.top-bar-list-item {
+    color: $body-color;
+
+    &.is-checked {
+        color: $primary;
+    }
+
+    &:hover {
+        color: $primary;
+        background: transparent;
+        text-decoration: none;
+
+        .top-bar-list-label {
+            cursor: pointer;
+        }
+    }
+}

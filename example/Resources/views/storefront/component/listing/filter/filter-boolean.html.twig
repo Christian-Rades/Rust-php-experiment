@@ -1,0 +1,36 @@
+{% block component_filter_boolean %}
+    {% set filterBooleanOptions = {
+        name: name,
+        displayName: displayName,
+        snippets: {
+            disabledFilterText: 'listing.disabledFilterTooltip'|trans|sw_sanitize
+        }
+    } %}
+
+    {% block component_filter_boolean_panel_item %}
+        <div class="filter-boolean filter-panel-item"
+             data-filter-boolean="true"
+             data-filter-boolean-options='{{ filterBooleanOptions|json_encode }}'>
+
+            {% block component_filter_boolean_container %}
+                <div class="{{ formCheckboxWrapperClass }}">
+
+                    {% block component_filter_boolean_checkbox %}
+                        <input type="checkbox"
+                               class="filter-boolean-input {{ formCheckInputClass }}"
+                               id="{{ name }}"
+                               name="{{ name }}">
+                    {% endblock %}
+
+                    {% block component_filter_boolean_label %}
+                        <label for="{{ name }}" class="filter-boolean-label custom-control-label">
+                            {% block component_filter_boolean_display_name %}
+                                {{ displayName }}
+                            {% endblock %}
+                        </label>
+                    {% endblock %}
+                </div>
+            {% endblock %}
+        </div>
+    {% endblock %}
+{% endblock %}

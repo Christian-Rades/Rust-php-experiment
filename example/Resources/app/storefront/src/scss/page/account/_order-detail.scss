@@ -1,0 +1,252 @@
+.order-detail-content {
+    border-top: 1px solid $border-color;
+}
+
+.order-detail-content-header {
+    display: none;
+}
+
+.document-detail-content-header {
+    display: block;
+    border-bottom: 1px solid $gray-300;
+    padding-bottom: $spacer-sm;
+}
+
+.order-detail-content-header,
+.order-item-detail-footer {
+    padding-left: $order-grid-gutter-width / 2;
+    padding-right: $order-grid-gutter-width / 2;
+}
+
+.order-detail-content-body {
+    &.has-element-loader {
+        min-height: 70px;
+        display: flex;
+    }
+
+    .element-loader-backdrop {
+        box-shadow: none;
+    }
+}
+
+.order-detail-content-header,
+.order-detail-content-row {
+    margin-right: $order-grid-gutter-width;
+    margin-left: $order-grid-gutter-width;
+}
+
+.order-detail-content-row {
+    font-weight: $font-weight-normal;
+    padding-top: $spacer;
+    padding-bottom: $spacer;
+
+    .document-item {
+        padding-left: $spacer-sm;
+        padding-right: $spacer-sm;
+    }
+
+    .order-item:last-of-type,
+    .document-item:last-of-type {
+        padding-right: 0;
+    }
+
+    .order-item:first-of-type,
+    .document-item:first-of-type {
+        padding-left: 0;
+    }
+}
+
+// @deprecated tag:v6.5.0 - Bootstrap v5 uses the breakpoint itself instead of the next breakpoint in `media-breakpoint-down()`, use `lg` instead of `md`.
+@include media-breakpoint-down(if(feature('v6.5.0.0'), lg, md)) {
+    .order-item,
+    .document-item {
+        padding-left: 0;
+        padding-right: 0;
+    }
+}
+
+.order-item-detail-list-item {
+    margin-bottom: $spacer;
+
+    &-divider {
+        border-top: 1px solid $border-color;
+        margin: $spacer $order-grid-gutter-width;
+    }
+
+    /* ------------------------------------
+     * @deprecated tag:v6.5.0 - Will be removed
+     * ------------------------------------ */
+    &.is-nested,
+    &.is-child {
+        border-left: 3px solid $border-color;
+        border-bottom-color: transparent;
+        margin: 0 $order-grid-gutter-width/-2;
+        padding: 0 $order-grid-gutter-width/2;
+    }
+
+    &:last-of-type .order-detail-content-row {
+        border-bottom: 0 none;
+    }
+
+    &.is-discount {
+        .cart-item-total-price {
+            color: $success;
+        }
+    }
+}
+
+.order-item-discount-icon {
+    text-align: center;
+}
+
+.order-item-total {
+    font-weight: $font-weight-bold;
+}
+
+.order-item-nested-icon {
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    display: flex;
+    margin: 0 auto;
+    width: 50px;
+    height: 50px;
+
+    .icon {
+        > svg {
+            top: 0;
+        }
+    }
+}
+
+.order-item-reorder {
+    display: flex;
+    justify-content: center;
+}
+
+.order-item-detail-footer {
+    padding: $spacer;
+}
+
+.order-item-detail-footer dl {
+    dt.col,
+    dt[class*='col-'] {
+        margin-bottom: $spacer-sm;
+        padding-right: $spacer-sm;
+    }
+}
+
+.order-item-detail-labels {
+    margin-bottom: 0;
+}
+
+.order-item-detail-labels-value {
+    font-weight: $font-weight-normal;
+}
+
+.order-detail-content-header {
+    padding-left: 0;
+    padding-right: 0;
+}
+
+.order-item-detail-summary {
+    &,
+    dd:last-child {
+        margin-bottom: 0;
+    }
+}
+
+.order-detail-comment {
+    border-top: 0;
+    display: block;
+    padding-top: 0;
+    padding-bottom: $spacer;
+}
+
+.card-title.order-detail-comment-title {
+    margin-bottom: 0;
+    padding: $spacer;
+}
+
+.order-detail-comment-body {
+    padding: $spacer;
+}
+
+.order-detail-comment-value {
+    margin-bottom: 0;
+}
+
+.order-item-variants-properties {
+    display: flex;
+}
+
+.order-item-variants-properties-name {
+    margin-right: $spacer-sm;
+}
+
+.order-detail-form {
+    float: right;
+}
+
+.document-item-view-file {
+    text-align: right;
+}
+
+@include media-breakpoint-up(md) {
+    .order-detail-content-header {
+        display: block;
+        padding-top: $spacer-sm;
+        padding-bottom: $spacer-sm;
+    }
+
+    .order-item-label {
+        display: none;
+    }
+
+    .order-detail-content-header {
+        border-bottom: 1px solid $gray-300;
+    }
+
+    .order-detail-content {
+        border-top: 0;
+    }
+
+    .order-header-price,
+    .order-item-price,
+    .order-header-total,
+    .order-item-total,
+    .order-header-actions {
+        text-align: right;
+    }
+
+    .order-header-quantity,
+    .order-item-quantity {
+        text-align: center;
+    }
+
+    .order-item-reorder {
+        justify-content: flex-end;
+    }
+
+    .order-item-detail-summary {
+        dt,
+        dd {
+            text-align: right;
+        }
+    }
+
+    .document-item-view-file-icon-btn {
+        display: none;
+    }
+}
+
+// @deprecated tag:v6.5.0 - Bootstrap v5 uses the breakpoint itself instead of the next breakpoint in `media-breakpoint-down()`, use `md` instead of `sm`.
+@include media-breakpoint-down(if(feature('v6.5.0.0'), md, sm)) {
+    .document-header-date {
+        display: none;
+    }
+
+    .document-item-view-file-text-btn {
+        display: none;
+    }
+}

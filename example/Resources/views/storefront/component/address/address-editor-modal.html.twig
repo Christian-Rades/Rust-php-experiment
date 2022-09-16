@@ -1,0 +1,171 @@
+{% set defaultBillingAddressId = context.customer.defaultBillingAddressId %}
+{% set defaultShippingAddressId = context.customer.defaultShippingAddressId %}
+
+{% set address = context.customer.defaultBillingAddress %}
+{% if changeShipping %}
+    {% set address = context.customer.defaultShippingAddress %}
+{% endif %}
+
+{% set typePrefix = changeShipping ? 'shipping-' : 'billing-' %}
+
+{% set AvailableAddressCount = 0 %}
+{% for address in page.addresses %}
+    {% if (address.id != defaultShippingAddressId and changeShipping) or (address.id != defaultBillingAddressId and changeBilling) %}
+        {% set AvailableAddressCount = AvailableAddressCount + 1 %}
+    {% endif %}
+{% endfor %}
+
+{% block component_address_address_editor_modal %}
+    <div class="js-address-editor">
+        {% block component_address_address_editor_modal_inner %}
+
+            {% block component_address_address_editor_modal_accordion_overview %}
+                {% if not page.address %}
+
+                    {% block component_address_address_editor_modal_accordion_overview_billing %}
+                        {% if changeBilling %}
+                            {% block component_address_address_editor_modal_accordion_overview_billing_card %}
+                                <div class="card">
+                                    {% block component_address_address_editor_modal_accordion_overview_billing_card_body %}
+                                        <div class="card-body">
+                                            {% block component_address_address_editor_modal_accordion_overview_billing_card_title %}
+                                                <div class="card-title">
+                                                    {% block component_address_address_editor_modal_accordion_overview_billing_card_title_text %}
+                                                        {{ "account.addressesTitleCurrentBillingAddress"|trans|sw_sanitize }}
+                                                    {% endblock %}
+                                                </div>
+                                            {% endblock %}
+
+                                            {% block component_address_address_editor_modal_accordion_overview_billing_card_address %}
+                                                {% sw_include '@Storefront/storefront/component/address/address.html.twig' with {
+                                                    'address': context.customer.defaultBillingAddress
+                                                } %}
+                                            {% endblock %}
+                                        </div>
+                                    {% endblock %}
+                                </div>
+                            {% endblock %}
+                        {% endif %}
+                    {% endblock %}
+
+                    {% block component_address_address_editor_modal_accordion_overview_shipping %}
+                        {% if changeShipping %}
+                            {% block component_address_address_editor_modal_accordion_overview_shipping_card %}
+                                <div class="card">
+                                    {% block component_address_address_editor_modal_accordion_overview_shipping_card_body %}
+                                        <div class="card-body">
+                                            {% block component_address_address_editor_modal_accordion_overview_shipping_card_title %}
+                                                <div class="card-title">
+                                                    {% block component_address_address_editor_modal_accordion_overview_shipping_card_title_text %}
+                                                        {{ "account.addressesTitleCurrentShippingAddress"|trans|sw_sanitize }}
+                                                    {% endblock %}
+                                                </div>
+                                            {% endblock %}
+
+                                            {% if feature('FEATURE_NEXT_15707') %}
+                                                {% block component_address_address_editor_modal_accordion_overview_shipping_card_warning %}
+                                                    {% set ableToShipToDefaultShippingAddress = context.customer.defaultShippingAddress.country.shippingAvailable %}
+
+                                                    {% if not ableToShipToDefaultShippingAddress %}
+                                                        {% sw_include '@Storefront/storefront/utilities/alert.html.twig' with {
+                                                            type: 'warning',
+                                                            content: 'address.countryNoShippingAlert'|trans|sw_sanitize
+                                                        } %}
+                                                    {% endif %}
+                                                {% endblock %}
+                                            {% endif %}
+
+                                            {% block component_address_address_editor_modal_accordion_overview_shipping_card_address %}
+                                                {% sw_include '@Storefront/storefront/component/address/address.html.twig' with {
+                                                    'address': context.customer.defaultShippingAddress
+                                                } %}
+                                            {% endblock %}
+                                        </div>
+                                    {% endblock %}
+                                </div>
+                            {% endblock %}
+                        {% endif %}
+                    {% endblock %}
+                {% endif %}
+            {% endblock %}
+
+            {% block component_address_address_editor_modal_accordion_actions %}
+                {% if not page.address %}
+                    <div class="row">
+
+                        {% block component_address_address_editor_modal_accordion_action_edit %}
+                            <div class="col-12 col-md-4">
+                                <div class="btn btn-outline-primary btn-block address-editor-edit create collapsed"
+                                     {{ dataBsToggleAttr }}="collapse"
+                                     {{ dataBsTargetAttr }}="#{{ typePrefix }}address-create-edit">
+                                    {{ "account.addressEditBtn"|trans|sw_sanitize }}
+                                </div>
+                            </div>
+                        {% endblock %}
+
+                        {% block component_address_address_editor_modal_accordion_action_list %}
+                            {% if AvailableAddressCount > 0 %}
+                                <div class="col-12 col-md-4">
+                                    <div class="btn btn-outline-primary btn-block address-editor-select"
+                                         {{ dataBsToggleAttr }}="collapse"
+                                         {{ dataBsTargetAttr }}="#{{ typePrefix }}address-list">
+                                        {{ "account.selectAddress"|trans|sw_sanitize }}
+                                    </div>
+                                </div>
+                            {% endif %}
+                        {% endblock %}
+
+                        {% block component_address_address_editor_modal_accordion_action_create %}
+                            <div class="col-12 col-md-4">
+                                <div class="btn btn-outline-primary btn-block address-editor-create collapsed"
+                                     {{ dataBsToggleAttr }}="collapse"
+                                     {{ dataBsTargetAttr }}="#{{ typePrefix }}address-create-new">
+                                    {{ "account.addressCreateBtn"|trans|sw_sanitize }}
+                                </div>
+                            </div>
+                        {% endblock %}
+
+                    </div>
+                {% endif %}
+            {% endblock %}
+
+            {% block component_address_address_editor_modal_accordion %}
+                <div id="{{ typePrefix }}addressEditorAccordion">
+                    {% block component_address_address_editor_modal_accordion_inner %}
+
+                        {% block component_address_address_editor_modal_accordion_list_include %}
+                            {% if not page.address and AvailableAddressCount > 0 %}
+                                {% sw_include '@Storefront/storefront/component/address/address-editor-modal-list.html.twig' with {
+                                    'address': page.address,
+                                    'addresses': page.addresses,
+                                    'defaultBillingAddress': defaultBillingAddressId,
+                                    'defaultShippingAddress': defaultShippingAddressId,
+                                    'changeShipping': changeShipping,
+                                    'changeBilling': changeBilling,
+                                    'typePrefix': typePrefix
+                                } %}
+                            {% endif %}
+                        {% endblock %}
+
+                        {% block component_address_address_editor_modal_accordion_edit_include %}
+                            {% sw_include '@Storefront/storefront/component/address/address-editor-modal-create-address.html.twig' with {
+                                'address': address,
+                                'addresses': page.addresses,
+                                'typePrefix': typePrefix
+                            } %}
+                        {% endblock %}
+
+                        {% block component_address_address_editor_modal_accordion_create_include %}
+                            {% sw_include '@Storefront/storefront/component/address/address-editor-modal-create-address.html.twig' with {
+                                'address': page.address,
+                                'addresses': page.addresses,
+                                'typePrefix': typePrefix
+                            } %}
+                        {% endblock %}
+
+                    {% endblock %}
+                </div>
+            {% endblock %}
+        {% endblock %}
+    </div>
+{% endblock %}

@@ -1,0 +1,36 @@
+{# @var navigation \Shopware\Core\Content\Category\Tree\Tree #}
+{% set activeId = navigation.active.id ?? context.salesChannel.navigationCategoryId %}
+{% set isRoot = activeId == context.salesChannel.navigationCategoryId %}
+{% set children = navigation.children(activeId) %}
+{% set active = navigation.active %}
+
+{% block layout_navigation_offcanvas_navigation_categories %}
+    <div class="navigation-offcanvas-container js-navigation-offcanvas">
+        <div class="navigation-offcanvas-overlay-content js-navigation-offcanvas-overlay-content">
+            {% if not isRoot %}
+                {% sw_include '@Storefront/storefront/layout/navigation/offcanvas/show-all-link.html.twig' %}
+
+                {# @deprecated tag:v6.5.0 - Passed variable `item` will be removed. Variable `treeItem` will be passed instead. #}
+                {% sw_include '@Storefront/storefront/layout/navigation/offcanvas/active-item-link.html.twig' with { item: active, treeItem: active } %}
+
+                {# @deprecated tag:v6.5.0 - Passed variable `item` will be removed. Variable `treeItem` will be passed instead. #}
+                {% sw_include '@Storefront/storefront/layout/navigation/offcanvas/back-link.html.twig' with { item: active, treeItem: active } %}
+            {% else %}
+                {% sw_include '@Storefront/storefront/layout/navigation/offcanvas/general-headline.html.twig' %}
+            {% endif %}
+
+            <ul class="list-unstyled navigation-offcanvas-list">
+                {% if not isRoot and page.navigation.active.type != "folder" %}
+                    {# @deprecated tag:v6.5.0 - Passed variable `item` will be removed. Variable `treeItem` will be passed instead. #}
+                    {% sw_include '@Storefront/storefront/layout/navigation/offcanvas/show-active-link.html.twig' with { item: active, treeItem: active } %}
+                {% endif %}
+
+                {# @var item \Shopware\Core\Content\Category\Tree\TreeItem #}
+                {% for treeItem in children.tree %}
+                    {# @deprecated tag:v6.5.0 - Passed variable `item` will be removed. Variable `treeItem` will be passed instead. #}
+                    {% sw_include '@Storefront/storefront/layout/navigation/offcanvas/item-link.html.twig' with { item: treeItem, treeItem: treeItem, activeId: activeId } %}
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+{% endblock %}

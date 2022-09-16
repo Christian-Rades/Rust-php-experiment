@@ -1,0 +1,21 @@
+/*
+Alert
+==============================================
+Custom styling for bootstrap alert component.
+
+https://getbootstrap.com/docs/4.3/components/alerts/
+*/
+
+.alert-has-icon {
+    display: flex;
+    align-items: center;
+
+    .alert-content-container {
+        padding-left: $spacer;
+    }
+}
+
+.alert-list {
+    padding-left: 20px;
+    margin-bottom: 0;
+}

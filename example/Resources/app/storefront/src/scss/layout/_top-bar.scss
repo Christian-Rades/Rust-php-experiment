@@ -1,0 +1,48 @@
+/*
+Top bar
+==================================================
+Contains styles for the top bar located at the top of the page.
+The top bar contains the language switcher, the currency switcher and the service menu.
+*/
+
+.top-bar-nav {
+    display: flex;
+    justify-content: flex-end;
+    min-height: 10px;
+}
+
+.top-bar-nav-item {
+    display: flex;
+    align-items: center;
+    margin-right: $spacer;
+
+    &:last-child {
+        margin-right: 0;
+    }
+}
+
+.top-bar-nav-text {
+    display: none;
+}
+
+.top-bar-list-label {
+    display: inline-block;
+    width: 100%;
+    margin-bottom: 0;
+}
+
+.top-bar-list-radio {
+    position: absolute;
+    clip: rect(0 0 0 0);
+    pointer-events: none;
+}
+
+.top-bar-list-icon {
+    margin-right: $spacer-sm;
+}
+
+@include media-breakpoint-up(md) {
+    .top-bar-nav-text {
+        display: inline;
+    }
+}

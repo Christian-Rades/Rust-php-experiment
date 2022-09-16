@@ -1,0 +1,21 @@
+.confirm-message {
+    padding: 10% 20%;
+    text-align: center;
+    font-size: 18px;
+    font-weight: $font-weight-semibold;
+
+    div.alert {
+        margin-top: 1em;
+    }
+}
+
+.confirm-alert {
+    padding: 1em 1em 3em;
+}
+
+// @deprecated tag:v6.5.0 - Bootstrap v5 uses the breakpoint itself instead of the next breakpoint in `media-breakpoint-down()`, use `md` instead of `sm`.
+@include media-breakpoint-down(if(feature('v6.5.0.0'), md, sm)) {
+    .confirm-message {
+        padding: 10% 0;
+    }
+}

@@ -1,0 +1,672 @@
+{% block sw_theme_manager_detail %}
+    <sw-page class="sw-theme-manager-detail">
+
+        {% block sw_theme_manager_detail_search_bar %}
+            <template slot="search-bar">
+                <sw-search-bar :placeholder="$tc('sw-theme-manager.general.placeholderSearchBar')"
+                               :entityService="themeRepository"
+                               @search="onSearch">
+                </sw-search-bar>
+            </template>
+        {% endblock %}
+
+        {% block sw_theme_manager_detail_smart_bar_header %}
+            <template slot="smart-bar-header">
+
+                {% block sw_theme_manager_detail_smart_bar_header_title %}
+                    <h2 v-if="theme">
+                        {% block sw_theme_manager_detail_smart_bar_header_title_text %}
+                            {{ theme.name }}
+                        {% endblock %}
+                    </h2>
+
+                    <h2 v-else>
+                        {% block sw_theme_manager_detail_smart_bar_header_title_text_default %}
+                            {{ $tc('sw-theme-manager.list.textThemeOverview') }}
+                        {% endblock %}
+                    </h2>
+                {% endblock %}
+            </template>
+        {% endblock %}
+
+        {% block sw_theme_manager_detail_smart_bar_actions %}
+            <template slot="smart-bar-actions">
+                <sw-button-group
+                    v-tooltip.bottom="{
+                        message: $tc('sw-privileges.tooltip.warning'),
+                        disabled: acl.can('theme.editor'),
+                        showOnDisabledElements: true
+                    }"
+                    class="sw-theme-manager-detail__save-button-group"
+                    :split-button="true"
+                >
+                    {% block sw_theme_manager_detail_smart_bar_actions_save %}
+                        <sw-button-process
+                            v-tooltip.bottom="{
+                                message: $tc('sw-privileges.tooltip.warning'),
+                                disabled: acl.can('theme.editor'),
+                                showOnDisabledElements: true
+                            }"
+                            class="sw_theme_manager_detail__save-action"
+                            :is-loading="isLoading"
+                            :process-success="isSaveSuccessful"
+                            variant="primary"
+                            :disabled="isLoading || !acl.can('theme.editor')"
+                            @process-finish="saveFinish"
+                            @click.prevent="onSave"
+                        >
+                            {{ $tc('sw-theme-manager.actions.save') }}
+                        </sw-button-process>
+                    {% endblock %}
+
+                    {% block sw_theme_manager_detail_smart_bar_actions_save_context_menu %}
+                        <sw-context-button>
+                            <template slot="button">
+                                <sw-button
+                                    class="sw_theme_manager_detail__button-context-menu"
+                                    square
+                                    variant="primary"
+                                    :disabled="isLoading || !acl.can('theme.editor')"
+                                >
+                                    <sw-icon
+                                            name="small-arrow-medium-down"
+                                            size="16"
+                                    />
+                                </sw-button>
+                            </template>
+
+                            {% block sw_theme_manager_detail_smart_bar_actions_save_context_menu_actions %}
+                                {% block sw_theme_manager_detail_smart_bar_actions_save_clean %}
+                                    <sw-context-menu-item
+                                        class="sw_theme_manager_detail__save-clean-action"
+                                        :disabled="!acl.can('theme.editor')"
+                                        @click="onSaveClean"
+                                        v-tooltip.top="{
+                                            message: $tc('sw-theme-manager.actions.saveCleanToolTip'),
+                                            disabled: !acl.can('theme.editor'),
+                                            showOnDisabledElements: true
+                                        }"
+                                    >
+                                        {{ $tc('sw-theme-manager.actions.saveClean') }}
+                                    </sw-context-menu-item>
+                                {% endblock %}
+                            {% endblock %}
+                        </sw-context-button>
+                    {% endblock %}
+                </sw-button-group>
+            </template>
+        {% endblock %}
+
+        {% block sw_theme_manager_detail_content %}
+            <template slot="content">
+                <div
+                    v-if="!shouldShowContent"
+                    class="sw-theme-manager-detail__content-skeleton"
+                >
+                    <sw-skeleton />
+                    <sw-skeleton />
+                </div>
+
+                <div v-else class="sw-theme-manager-detail__content">
+                    <sw-tabs defaultItem="default" @new-item-active="onChangeTab">
+                        <template #default="{ active }">
+                            <sw-tabs-item v-if="hasMoreThanOneTab"
+                                          v-for="(tab, tabName) in structuredThemeFields.tabs"
+                                          :key="tabName"
+                                          :title="tab.label"
+                                          :name="tabName"
+                                          :active="active === tabName">
+                                {{ tab.label || $tc('sw-theme-manager.general.defaultTab') }}
+                            </sw-tabs-item>
+                        </template>
+
+                        <template #content="{ active }">
+                            <template v-if="active === 'default'">
+                                <template v-if="isDerived">
+                                    {% block sw_theme_manager_detail_content_inheritance %}
+                                        <div class="sw-theme-manager-detail__inheritance">
+                                            {% block sw_theme_manager_detail_content_inheritance_icon %}
+                                                <sw-icon :multicolor="true" size="20" name="custom-inherited"></sw-icon>
+                                            {% endblock %}
+
+                                            {% block sw_theme_manager_detail_content_inheritance_text %}
+                                                <p class="sw-theme-manager-detail__inheritance-text" v-if="parentTheme">
+                                                    {{ $tc('sw-theme-manager.detail.inheritanceInfo', 0, { parentThemeName: parentTheme.name }) }}
+                                                </p>
+                                                <p class="sw-theme-manager-detail__inheritance-text" v-else-if="defaultTheme">
+                                                    {{ $tc('sw-theme-manager.detail.inheritanceInfo', 0, { parentThemeName: defaultTheme.name }) }}
+                                                </p>
+                                            {% endblock %}
+                                        </div>
+                                    {% endblock %}
+                                </template>
+
+                                {% block sw_theme_manager_detail_content_info %}
+                                    <sw-card class="sw-theme-manager-detail__info-card">
+                                        <div class="sw-theme-manager-detail__info">
+
+                                            {% block sw_theme_manager_detail_content_info_image %}
+                                                <div class="sw-theme-manager-detail__info-image" :style="previewMedia"></div>
+                                            {% endblock %}
+
+                                            {% block sw_theme_manager_detail_content_info_content %}
+                                                <div class="sw-theme-manager-detail__info-content">
+                                                    <div class="sw-theme-manager-detail__info-name">{{ theme.name }}</div>
+                                                    <div class="sw-theme-manager-detail__info-author">{{ theme.author }}</div>
+                                                    <div v-if="theme.description" class="sw-theme-manager-detail__info-descr">
+                                                        <p class="sw-theme-manager-detail__info-descr-title">
+                                                            {{ $tc('sw-theme-manager.detail.description') }}:
+                                                        </p>
+                                                        <p>{{ theme.description |truncate(140) }}</p>
+                                                    </div>
+
+                                                    <sw-entity-multi-select
+                                                        v-model="theme.salesChannels"
+                                                        class="sw-theme-manager-detail__saleschannels-select"
+                                                        :label="$tc('sw-theme-manager.detail.salesChannel')"
+                                                        :disabled="!acl.can('theme.editor')"
+                                                        :helpText="isDefaultTheme ? $tc('sw-theme-manager.detail.salesChannelHelpText') : null"
+                                                        :selectionDisablingMethod="selectionDisablingMethod">
+                                                        <template #result-item="{ item, index }">
+                                                            <span v-if="!isThemeCompatible(item)"></span>
+                                                        </template>
+                                                    </sw-entity-multi-select>
+
+                                                </div>
+                                            {% endblock %}
+                                        </div>
+
+                                        {% block sw_theme_manager_detail_content_info_context_button %}
+                                            <sw-context-button
+                                                class="sw-theme-manager-detail__context-button"
+                                                :zIndex="1100"
+                                            >
+
+                                                {% block sw_theme_manager_detail_context_button_option_rename %}
+                                                    <sw-context-menu-item
+                                                        @click="onRenameTheme(theme)"
+                                                        :disabled="!acl.can('theme.editor')">
+                                                        {{ $tc('sw-theme-manager.actions.rename') }}
+                                                    </sw-context-menu-item>
+                                                {% endblock %}
+
+                                                {% block sw_theme_manager_detail_context_button_option_create %}
+                                                    <sw-context-menu-item
+                                                        @click="onDuplicateTheme(theme)"
+                                                        v-if="!theme.parentThemeId"
+                                                        :disabled="!acl.can('theme.creator')">
+                                                        {{ $tc('sw-theme-manager.actions.duplicate') }}
+                                                    </sw-context-menu-item>
+                                                {% endblock %}
+
+                                                {% block sw_theme_manager_detail_context_button_option_reset %}
+                                                    <sw-context-menu-item
+                                                        @click="onReset"
+                                                        v-if="theme.configValues !== null"
+                                                        :disabled="!acl.can('theme.editor')"
+                                                        variant="danger">
+                                                        {{ $tc('sw-theme-manager.actions.buttonReset') }}
+                                                    </sw-context-menu-item>
+                                                {% endblock %}
+
+                                                {% block sw_theme_manager_detail_context_button_option_delete %}
+                                                    <sw-context-menu-item
+                                                        v-if="theme.parentThemeId"
+                                                        :disabled="!acl.can('theme.deleter') || theme.salesChannels.length > 0"
+                                                        v-tooltip.right="deleteDisabledToolTip"
+                                                        class="sw-theme-manager-detail__option-delete"
+                                                        variant="danger"
+                                                        @click="onDeleteTheme(theme)">
+                                                        {{ $tc('sw-theme-manager.actions.delete') }}
+                                                    </sw-context-menu-item>
+                                                {% endblock %}
+                                            </sw-context-button>
+                                        {% endblock %}
+                                    </sw-card>
+                                {% endblock %}
+                            </template>
+
+                            <template v-for="(tab, tabName) in structuredThemeFields.tabs">
+                                <template v-if="tabName === active">
+                                    {% block sw_theme_manager_detail_content_areas %}
+                                        <sw-card v-for="(block, blockName) in tab.blocks"
+                                                 :key="blockName"
+                                                 class="sw-theme-manager-detail__area"
+                                                 :title="block.label">
+
+                                            {% block sw_theme_manager_detail_content_sections %}
+                                                <sw-card-section v-for="(section, sectionName) in block.sections"
+                                                                 :key="sectionName">
+                                                    <div v-if="section.label" class="sw-theme-manager-detail__content--section_title">
+                                                        {{ section.label }}
+                                                    </div>
+
+                                                    {% block sw_theme_manager_detail_content_fields %}
+                                                        <sw-container class="sw-theme-manager-detail__content--section_field">
+                                                            <div v-for="(field, fieldName) in section.fields"
+                                                                 :key="fieldName"
+                                                                 class="sw-theme-manager-detail__content--section_field"
+                                                                 :class="{'sw-theme-manager-detail__content--section_field-full-width': field.fullWidth}">
+                                                                <template v-if="themeConfig[fieldName] && baseThemeConfig[fieldName]">
+                                                                    <template v-if="mapSwFieldTypes(field.type) === 'select'">
+                                                                        <sw-inherit-wrapper
+                                                                                :class="'sw-field-id-' + fieldName"
+                                                                                v-model="currentThemeConfig[fieldName].value"
+                                                                                :ref="`wrapper-${fieldName}`"
+                                                                                :has-parent="theme.baseConfig?.fields?.[fieldName] == null"
+                                                                                :inherited-value="baseThemeConfig[fieldName].value"
+                                                                                :label="!field.label ? '' : field.label"
+                                                                                :customInheritationCheckFunction="checkInheritanceFunction(fieldName)"
+                                                                                @input="handleInheritanceInput($event, fieldName)"
+                                                                        >
+                                                                            <template #content="{ currentValue, updateCurrentValue, isInherited }">
+                                                                                <sw-field
+                                                                                        type="select"
+                                                                                        :placeholder="field.placeholder"
+                                                                                        :options="field.options"
+                                                                                        :helpText="!field.helpText ? null : field.helpText"
+                                                                                        :disabled="isInherited || !acl.can('theme.editor')"
+                                                                                        @change="updateCurrentValue"
+                                                                                        @input="updateCurrentValue"
+                                                                                        v-model="currentValue">
+                                                                                </sw-field>
+                                                                            </template>
+                                                                        </sw-inherit-wrapper>
+                                                                    </template>
+
+                                                                    <template v-else-if="field.type === 'url'">
+                                                                        <sw-inherit-wrapper
+                                                                                :class="'sw-field-id-' + fieldName"
+                                                                                v-model="currentThemeConfig[fieldName].value"
+                                                                                :ref="`wrapper-${fieldName}`"
+                                                                                :has-parent="theme.baseConfig?.fields?.[fieldName] == null"
+                                                                                :inherited-value="baseThemeConfig[fieldName].value"
+                                                                                :label="!field.label ? '' : field.label"
+                                                                                :customInheritationCheckFunction="checkInheritanceFunction(fieldName)"
+                                                                                @input="handleInheritanceInput($event, fieldName)"
+                                                                        >
+                                                                            <template #content="{ currentValue, updateCurrentValue, isInherited }">
+                                                                                <sw-field
+                                                                                        type="url"
+                                                                                        :helpText="!field.helpText ? null : field.helpText"
+                                                                                        :disabled="isInherited || !acl.can('theme.editor')"
+                                                                                        @change="updateCurrentValue"
+                                                                                        @input="updateCurrentValue"
+                                                                                        v-model="currentValue">
+                                                                                </sw-field>
+                                                                            </template>
+                                                                        </sw-inherit-wrapper>
+                                                                    </template>
+                                                                    <div v-else-if="field.type === 'media'">
+
+                                                                        <sw-upload-listener
+                                                                            :uploadTag="tabName + '-' + blockName + '-' + sectionName + '-' + fieldName"
+                                                                            @media-upload-finish="successfulUpload($event, currentThemeConfig[fieldName])"
+                                                                            autoUpload>
+                                                                        </sw-upload-listener>
+
+                                                                        <sw-inherit-wrapper
+                                                                                :class="'sw-field-id-' + fieldName"
+                                                                                v-model="currentThemeConfig[fieldName].value"
+                                                                                :ref="`wrapper-${fieldName}`"
+                                                                                :has-parent="theme.baseConfig?.fields?.[fieldName] == null"
+                                                                                :inherited-value="baseThemeConfig[fieldName].value"
+                                                                                :label="!field.label ? '' : field.label"
+                                                                                :customInheritationCheckFunction="checkInheritanceFunction(fieldName)"
+                                                                                @input="handleInheritanceInput($event, fieldName)"
+                                                                        >
+                                                                                <template #content="{ currentValue, updateCurrentValue, isInherited, removeInheritance }">
+                                                                                    <sw-media-upload-v2
+                                                                                        :source="currentValue"
+                                                                                        :uploadTag="tabName + '-' + blockName + '-' + sectionName + '-' + fieldName"
+                                                                                        :helpText="!field.helpText ? null : field.helpText"
+                                                                                        :ref="tabName + '-' + blockName + '-' + sectionName + '-' + fieldName"
+                                                                                        :defaultFolder="themeRepository.schema.entity"
+                                                                                        :allowMultiSelect="false"
+                                                                                        :disabled="!acl.can('theme.editor') || themeConfig[fieldName].editable === false"
+                                                                                        @media-drop="onDropMedia($event, currentThemeConfig[fieldName])"
+                                                                                        @media-upload-sidebar-open="openMediaSidebar()"
+                                                                                        @media-upload-remove-image="removeMediaItem(fieldName, updateCurrentValue, isInherited, removeInheritance)">
+                                                                                    </sw-media-upload-v2>
+                                                                                </template>
+                                                                            </sw-inherit-wrapper>
+                                                                    </div>
+
+                                                                    <template v-else-if="mapSwFieldTypes(field.type)">
+                                                                        <sw-inherit-wrapper
+                                                                            :class="'sw-field-id-' + fieldName"
+                                                                            v-model="currentThemeConfig[fieldName].value"
+                                                                            :ref="`wrapper-${fieldName}`"
+                                                                            :has-parent="theme.baseConfig?.fields?.[fieldName] == null"
+                                                                            :inherited-value="baseThemeConfig[fieldName].value"
+                                                                            :label="!field.label ? '' : field.label"
+                                                                            :customInheritationCheckFunction="checkInheritanceFunction(fieldName)"
+                                                                            @input="handleInheritanceInput($event, fieldName)"
+                                                                        >
+                                                                            <template #content="{ currentValue, updateCurrentValue, isInherited }">
+                                                                                <sw-field
+                                                                                    :type="mapSwFieldTypes(field.type)"
+                                                                                    :helpText="!field.helpText ? null : field.helpText"
+                                                                                    :disabled="isInherited || !acl.can('theme.editor') || themeConfig[fieldName].editable === false"
+                                                                                    :value="currentValue"
+                                                                                    @change="updateCurrentValue"
+                                                                                    @input="updateCurrentValue"
+                                                                                >
+                                                                                </sw-field>
+                                                                            </template>
+                                                                        </sw-inherit-wrapper>
+                                                                    </template>
+
+                                                                    <template v-else-if="themeConfig[fieldName].editable !== false">
+                                                                        <sw-inherit-wrapper
+                                                                                :class="'sw-field-id-' + fieldName"
+                                                                                v-model="currentThemeConfig[fieldName].value"
+                                                                                :ref="`wrapper-${fieldName}`"
+                                                                                :has-parent="theme.baseConfig?.fields?.[fieldName] == null"
+                                                                                :inherited-value="baseThemeConfig[fieldName].value"
+                                                                                :label="!field.label ? '' : field.label"
+                                                                                :customInheritationCheckFunction="checkInheritanceFunction(fieldName)"
+                                                                                @input="handleInheritanceInput($event, fieldName)"
+                                                                        >
+                                                                            <template #content="{ currentValue, updateCurrentValue, isInherited }">
+                                                                                <sw-form-field-renderer
+                                                                                    v-bind="getBind(field)"
+                                                                                    :value="currentValue"
+                                                                                    @change="updateCurrentValue"
+                                                                                    @input="updateCurrentValue"
+                                                                                    :disabled="isInherited || !acl.can('theme.editor')">
+                                                                                </sw-form-field-renderer>
+                                                                            </template>
+                                                                        </sw-inherit-wrapper>
+                                                                    </template>
+                                                                </template>
+                                                            </div>
+                                                        </sw-container>
+                                                    {% endblock %}
+                                                </sw-card-section>
+                                            {% endblock %}
+                                        </sw-card>
+                                    {% endblock %}
+                                </template>
+                            </template>
+                        </template>
+                    </sw-tabs>
+                </div>
+            {% endblock %}
+
+            {% block sw_theme_manager_reset_modal %}
+                <sw-modal v-if="showResetModal"
+                          @modal-close="onCloseResetModal"
+                          :title="$tc('sw-theme-manager.modal.modalTitleReset')"
+                          variant="small">
+
+                    {% block sw_theme_manager_reset_modal_reset_text %}
+                        <p class="sw_theme_manager__confirm-reset-text">
+                            {{ $tc('sw-theme-manager.modal.modalTextResetInfo') }}
+                        </p>
+                        <p v-if="theme.salesChannels.length > 0" class="sw_theme_manager__confirm-reset-text">
+                            {{ $tc('sw-theme-manager.modal.modalTextResetAssigned') }}
+                        </p>
+                    {% endblock %}
+
+                    {% block sw_theme_manager_reset_modal_footer %}
+                        <template slot="modal-footer">
+                            {% block sw_theme_manager_reset_modal_cancel %}
+                                <sw-button @click="onCloseResetModal"
+                                           size="small">
+                                    {{ $tc('sw-theme-manager.actions.buttonCancel') }}
+                                </sw-button>
+                            {% endblock %}
+
+                            {% block sw_theme_manager_reset_modal_confirm %}
+                                <sw-button @click="onConfirmThemeReset"
+                                           variant="danger"
+                                           size="small">
+                                    {{ $tc('sw-theme-manager.actions.buttonReset') }}
+                                </sw-button>
+                            {% endblock %}
+                     </template>
+                    {% endblock %}
+                </sw-modal>
+            {% endblock %}
+
+            {% block sw_theme_manager_detail_delete_modal %}
+                <sw-modal v-if="showDeleteModal"
+                          @modal-close="onCloseDeleteModal"
+                          :title="$tc('global.default.warning')"
+                          variant="small">
+
+                    {% block sw_theme_manager_detail_delete_modal_info %}
+                        <div class="sw_theme_manager__confirm-delete-text">
+                            {{ $tc('sw-theme-manager.modal.textDeleteInfo', 0,
+                            { themeName: theme.name }) }}
+                        </div>
+                    {% endblock %}
+
+                    {% block sw_theme_manager_detail_delete_modal_footer %}
+                        <template slot="modal-footer">
+                            {% block sw_theme_manager_detail_delete_modal_cancel %}
+                                <sw-button @click="onCloseDeleteModal"
+                                           size="small">
+                                    {{ $tc('sw-theme-manager.modal.buttonCancel') }}
+                                </sw-button>
+                            {% endblock %}
+
+                            {% block sw_theme_manager_detail_delete_modal_confirm %}
+                                <sw-button @click="onConfirmThemeDelete"
+                                           variant="danger"
+                                           size="small">
+                                    {{ $tc('sw-theme-manager.modal.buttonDelete') }}
+                                </sw-button>
+                            {% endblock %}
+                        </template>
+                    {% endblock %}
+                </sw-modal>
+            {% endblock %}
+
+            {% block sw_theme_manager_detail_save_modal %}
+                <sw-modal v-if="showSaveModal"
+                          class="sw-theme-manager-detail-modal"
+                          @modal-close="onCloseSaveModal"
+                          :title="$tc('sw-theme-manager.modal.modalTitleSave')"
+                          variant="large">
+
+                    {% block sw_theme_manager_detail_save_modal_info %}
+                        <div class="sw_theme_manager__confirm-save-text">
+                            {{ $tc('sw-theme-manager.modal.textSaveInfo', 0,
+                            { themeName: theme.name }) }}
+                        </div>
+                    {% endblock %}
+
+                    {% block sw_theme_manager_detail_save_modal_already_assigned_warning %}
+                        <sw-alert
+                            v-if="overwrittenSalesChannelAssignments.length > 0"
+                            variant="warning">
+
+                            <div class="sw-theme-manager-detail__sales-channel-warning" v-if="overwrittenSalesChannelAssignments.length === 1">
+                                <span v-html="$tc('sw-theme-manager.modal.salesChannelAlreadyAssignedModal.descriptionSingle', 0, { newThemeName: theme.name })"></span>
+                            </div>
+
+                            <div class="sw-theme-manager-detail__sales-channel-warning" v-else>
+                                <span v-html="$tc('sw-theme-manager.modal.salesChannelAlreadyAssignedModal.descriptionMultiple', 0, { newThemeName: theme.name })"></span>
+                            </div>
+
+                            <div v-for="salesChannel in overwrittenSalesChannelAssignments">
+                                <b>{{ salesChannel.oldThemeName }}</b> ({{ salesChannel.salesChannelName }})
+                            </div>
+                        </sw-alert>
+                    {% endblock %}
+
+                    {% block sw_theme_manager_detail_save_modal_removed_warning %}
+                        <sw-alert
+                            v-if="removedSalesChannels.length > 0"
+                            variant="warning">
+                            <div class="sw-theme-manager-detail__sales-channel-warning" v-if="removedSalesChannels.length === 1">
+                                <span v-html="$tc('sw-theme-manager.modal.salesChannelRemovedModal.descriptionSingle', 0, { defaultThemeName: defaultTheme.name })"></span>
+                            </div>
+
+                            <div class="sw-theme-manager-detail__sales-channel-warning" v-else>
+                                <span v-html="$tc('sw-theme-manager.modal.salesChannelRemovedModal.descriptionMultiple', 0, { defaultThemeName: defaultTheme.name })"></span>
+                            </div>
+
+                            <div v-for="salesChannel in removedSalesChannels">
+                                <b>{{ theme.name }}</b> ({{ salesChannel.name }})
+                            </div>
+                        </sw-alert>
+                    {% endblock %}
+
+                    {% block sw_theme_manager_detail_save_modal_footer %}
+                        <template slot="modal-footer">
+                            {% block sw_theme_manager_detail_save_modal_cancel %}
+                                <sw-button @click="onCloseSaveModal"
+                                           size="small">
+                                    {{ $tc('sw-theme-manager.modal.buttonCancel') }}
+                                </sw-button>
+                            {% endblock %}
+
+                            {% block sw_theme_manager_detail_save_modal_confirm %}
+                                <sw-button @click="onConfirmThemeSave"
+                                           variant="primary"
+                                           size="small">
+                                    {{ $tc('sw-theme-manager.modal.buttonSave') }}
+                                </sw-button>
+                            {% endblock %}
+                        </template>
+                    {% endblock %}
+                </sw-modal>
+            {% endblock %}
+
+            {% block sw_theme_manager_detail_duplicate_modal %}
+                <sw-modal v-if="showDuplicateModal"
+                          class="sw_theme_manager__duplicate-modal"
+                          @modal-close="onCloseDuplicateModal"
+                          :title="$tc('sw-theme-manager.modal.modalTitleDuplicate')"
+                          variant="small">
+
+                    {% block sw_theme_manager_detail_duplicate_modal_name_input %}
+                        <div class="sw_theme_manager__duplicate-info">
+                            {{ $tc('sw-theme-manager.modal.textDuplicateInfo') }}
+                        </div>
+
+                        <sw-field v-model="newThemeName"
+                                  :label="$tc('sw-theme-manager.modal.labelDuplicateThemeName')"
+                                  :placeholder="$tc('sw-theme-manager.modal.placeholderDuplicateThemeName')"
+                                  tpye="text">
+                        </sw-field>
+                    {% endblock %}
+
+                    {% block sw_theme_manager_detail_duplicate_modal_footer %}
+                        <template slot="modal-footer">
+                            {% block sw_theme_manager_detail_duplicate_modal_cancel %}
+                                <sw-button @click="onCloseDuplicateModal"
+                                           size="small">
+                                    {{ $tc('sw-theme-manager.modal.buttonCancel') }}
+                                </sw-button>
+                            {% endblock %}
+
+                            {% block sw_theme_manager_detail_duplicate_modal_confirm %}
+                                <sw-button @click="onConfirmThemeDuplicate"
+                                           variant="primary"
+                                           :disabled="newThemeName.length < 3"
+                                           size="small">
+                                    {{ $tc('sw-theme-manager.modal.buttonDuplicateTheme') }}
+                                </sw-button>
+                            {% endblock %}
+                        </template>
+                    {% endblock %}
+                </sw-modal>
+            {% endblock %}
+
+            {% block sw_theme_manager_detail_rename_modal %}
+                <sw-modal v-if="showRenameModal"
+                          class="sw_theme_manager__rename-modal"
+                          @modal-close="onCloseRenameModal"
+                          :title="$tc('sw-theme-manager.modal.modalTitleRename')"
+                          variant="small">
+
+                    {% block sw_theme_manager_detail_rename_modal_name_input %}
+                        <div class="sw_theme_manager__rename-info">
+                            {{ $tc('sw-theme-manager.modal.textRenameInfo') }}
+                        </div>
+
+                        <sw-field v-model="newThemeName"
+                                  :label="$tc('sw-theme-manager.modal.labelRenameThemeName')"
+                                  :placeholder="$tc('sw-theme-manager.modal.placeholderRenameThemeName')"
+                                  tpye="text">
+                        </sw-field>
+                    {% endblock %}
+
+                    {% block sw_theme_manager_detail_rename_modal_footer %}
+                        <template slot="modal-footer">
+                            {% block sw_theme_manager_detail_rename_modal_cancel %}
+                                <sw-button @click="onCloseRenameModal"
+                                           size="small">
+                                    {{ $tc('sw-theme-manager.modal.buttonCancel') }}
+                                </sw-button>
+                            {% endblock %}
+
+                            {% block sw_theme_manager_detail_rename_modal_confirm %}
+                                <sw-button @click="onConfirmThemeRename"
+                                           variant="primary"
+                                           :disabled="newThemeName.length < 3"
+                                           size="small">
+                                    {{ $tc('sw-theme-manager.modal.buttonRenameTheme') }}
+                                </sw-button>
+                            {% endblock %}
+                        </template>
+                    {% endblock %}
+                </sw-modal>
+            {% endblock %}
+
+            {% block sw_theme_manager_detail_error_modal %}
+                <sw-modal v-if="errorModalMessage"
+                          @modal-close="onCloseErrorModal"
+                          :title="$tc('sw-theme-manager.modal.errorModalTitle')"
+                          variant="large">
+
+                    {% block sw_theme_manager_detail_error_modal_message %}
+                        <pre style="white-space: pre-line;">{{ errorModalMessage }}</pre>
+                    {% endblock %}
+
+                    {% block sw_theme_manager_detail_error_modal_footer %}
+                        <template slot="modal-footer">
+                            {% block sw_theme_manager_detail_error_modal_close %}
+                                <sw-button @click="onCloseErrorModal" size="small">
+                                    {{ $tc('sw-theme-manager.modal.buttonClose') }}
+                                </sw-button>
+                            {% endblock %}
+                        </template>
+                    {% endblock %}
+                </sw-modal>
+            {% endblock %}
+        </template>
+
+        {% block sw_theme_manager_detail_sidebar %}
+            <sw-sidebar slot="sidebar" :propagateWidth="true">
+                {% block sw_theme_manager_detail_sidebar_media %}
+                    <sw-sidebar-media-item
+                        ref="mediaSidebarItem"
+                        :initialFolderId="defaultMediaFolderId">
+                        <template #context-menu-items="media">
+                            {% block sw_theme_manager_detail_sidebar_media_items %}
+                                <template v-if="shouldShowContent" v-for="(tab, tabName) in structuredThemeFields.tabs">
+                                    <template v-for="block in tab.blocks">
+                                        <template v-for="section in block.sections">
+                                            <sw-context-menu-item
+                                                v-for="(field, fieldName) in section.fields"
+                                                v-if="themeConfig[fieldName] && field.type === 'media'"
+                                                :key="fieldName"
+                                                @click="onAddMediaToTheme(media.mediaItem, currentThemeConfig[fieldName])">
+                                                {{ $tc('sw-theme-manager.modal.addToMediaLabel', 0, { name: field.label }) }}
+                                            </sw-context-menu-item>
+                                        </template>
+                                    </template>
+                                </template>
+                            {% endblock %}
+                        </template>
+                    </sw-sidebar-media-item>
+                {% endblock %}
+            </sw-sidebar>
+        {% endblock %}
+    </sw-page>
+{% endblock %}

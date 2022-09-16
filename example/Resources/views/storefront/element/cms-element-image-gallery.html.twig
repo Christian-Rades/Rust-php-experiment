@@ -1,0 +1,509 @@
+{% block element_image_gallery %}
+    {# cms element data and configs #}
+    {% if element.fieldConfig is defined and element.data is defined %}
+        {% set sliderConfig = element.fieldConfig.elements %}
+
+        {% set mediaItems = [] %}
+        {% for item in element.data.sliderItems %}
+            {% set mediaItems = mediaItems|merge([item.media]) %}
+        {% endfor %}
+
+        {% set zoom = sliderConfig.zoom.value %}
+        {% set gutter = sliderConfig.gutter.value %}
+        {% set keepAspectRatioOnZoom = sliderConfig.keepAspectRatioOnZoom.value %}
+        {% set magnifierOverGallery = sliderConfig.magnifierOverGallery.value %}
+        {% set zoomModal = sliderConfig.fullScreen.value %}
+        {% set minHeight = sliderConfig.minHeight.value %}
+        {% set displayMode = sliderConfig.displayMode.value %}
+        {% set navigationArrows = sliderConfig.navigationArrows.value %}
+        {% set navigationDots = sliderConfig.navigationDots.value %}
+        {% set galleryPosition = sliderConfig.galleryPosition.value %}
+        {% set verticalAlign = sliderConfig.verticalAlign.value %}
+        {% set zoomImageContainerSelector = sliderConfig.zoomImageContainerSelector.value %}
+    {% endif %}
+
+    {% if fallbackImageTitle is not defined %}
+        {% set fallbackImageTitle = '' %}
+    {% endif %}
+
+    {# @var mediaItems \Shopware\Core\Content\Media\MediaCollection #}
+    {% set imageCount = mediaItems|length %}
+
+    {# too many underneath thumbs or slider dots make them hard to see #}
+    {% set maxItemsToShowMobileNav = 5 %}
+    {% set maxItemsToShowNav = 8 %}
+
+    {% set magnifierOptions = [] %}
+
+    {% if magnifierOverGallery %}
+        {% set magnifierOptions = magnifierOptions|merge({
+            'magnifierOverGallery': true,
+            'cursorType': 'crosshair'
+        }) %}
+    {% endif %}
+
+    {% if keepAspectRatioOnZoom is defined and keepAspectRatioOnZoom is not null %}
+        {% set magnifierOptions = magnifierOptions|merge({
+            'keepAspectRatioOnZoom': keepAspectRatioOnZoom
+        }) %}
+    {% endif %}
+
+    {% if zoomImageContainerSelector %}
+        {% set magnifierOptions = magnifierOptions|merge({
+            'zoomImageContainerSelector': zoomImageContainerSelector
+        }) %}
+    {% endif %}
+
+    <div class="cms-element-{{ element.type }}{% if displayMode == "standard" and verticalAlign %} has-vertical-alignment{% endif %}">
+        {% block element_image_gallery_alignment %}
+            {% if config.verticalAlign.value %}
+                <div class="cms-element-alignment{% if verticalAlign == "center" %} align-self-center{% elseif verticalAlign == "flex-end" %} align-self-end{% else %} align-self-start{% endif %}">
+            {% endif %}
+
+                {% set gallerySliderOptions = {
+                    slider: {
+                        navPosition: 'bottom',
+                        speed: 500,
+                        gutter: gutter ? gutter : 0,
+                        controls: navigationArrows ? true : false,
+                        autoHeight: false,
+                        startIndex: startIndexThumbnails ? startIndexThumbnails : null
+                    },
+                    thumbnailSlider: {
+                        items: (galleryPosition == "underneath") ? 6 : 5,
+                        slideBy: (galleryPosition == "underneath") ? 5 : 4,
+                        controls: true,
+                        startIndex: startIndexThumbnails ? startIndexThumbnails : null,
+                        responsive: {
+                            xs: {
+                                enabled: false,
+                                controls: false
+                            },
+                            sm: {
+                                enabled: false,
+                                controls: false
+                            }
+                        }
+                    }
+                } %}
+
+                {% if galleryPosition == "left" %}
+                    {% set gallerySliderOptions = gallerySliderOptions|replace_recursive({
+                        thumbnailSlider: {
+                            responsive: {
+                                md: {
+                                    axis: 'vertical'
+                                },
+                                lg: {
+                                    axis: 'vertical'
+                                },
+                                xl: {
+                                    axis: 'vertical'
+                                }
+                            }
+                        }
+                    }) %}
+
+                    {# @deprecated tag:v6.5.0 - Bootstrap v5 adds xxl breakpoint #}
+                    {% if feature('v6.5.0.0') %}
+                        {% set gallerySliderOptions = gallerySliderOptions|replace_recursive({
+                            thumbnailSlider: {
+                                responsive: {
+                                    xxl: {
+                                        axis: 'vertical'
+                                    }
+                                }
+                            }
+                        }) %}
+                    {% endif %}
+                {% endif %}
+
+                {% block element_image_gallery_inner %}
+                    <div class="row gallery-slider-row{% if imageCount == 1 %} is-single-image{% else %} is-loading{% endif %} js-gallery-zoom-modal-container"
+                            {% if zoom %}
+                                data-magnifier="true"
+                            {% endif %}
+                            {% if magnifierOptions|length > 0 %}
+                                data-magnifier-options='{{ magnifierOptions|json_encode|raw }}'
+                            {% endif %}
+                            {% if imageCount > 1 %}
+                                data-gallery-slider="true"
+                                data-gallery-slider-options='{{ gallerySliderOptions|json_encode }}'
+                            {% endif %}>
+
+                        {% block element_image_gallery_inner_col %}
+                            <div class="gallery-slider-col{% if galleryPosition == "left" %} col order-1 order-md-2{% elseif galleryPosition == "underneath" %} col-12 order-1{% endif %}"
+                                 {% if zoomModal %}data-zoom-modal="true"{% endif %}>
+                                {# option "magnifierOverGallery" shows zoom container over gallery #}
+                                <div class="base-slider gallery-slider{% if navigationArrows == "outside" %} has-nav-outside{% endif %}{% if navigationDots == "outside" %} has-dots-outside{% endif %}{% if magnifierOverGallery %} js-magnifier-zoom-image-container{% endif %}">
+                                    {% block element_image_gallery_inner_wrapper %}
+                                        {% if imageCount > 1 %}
+                                            {% block element_image_gallery_inner_multiple_slides %}
+                                                {% block element_image_gallery_inner_container %}
+                                                    <div class="gallery-slider-container"
+                                                         data-gallery-slider-container="true">
+                                                        {% block element_image_gallery_inner_items %}
+                                                            {% for image in mediaItems %}
+                                                                {% block element_image_gallery_inner_item %}
+                                                                    <div class="gallery-slider-item-container">
+                                                                        <div class="gallery-slider-item is-{{ displayMode }} js-magnifier-container"{% if minHeight and  (displayMode == "cover" or displayMode == "contain" ) %} style="min-height: {{ minHeight }}"{% endif %}>
+                                                                            {% set attributes = {
+                                                                                'class': 'img-fluid gallery-slider-image magnifier-image js-magnifier-image',
+                                                                                'alt': (image.translated.alt ?: fallbackImageTitle),
+                                                                                'title': (image.translated.title ?: fallbackImageTitle),
+                                                                                'data-full-image': image.url
+                                                                            } %}
+
+                                                                            {% if displayMode == 'cover' or displayMode == 'contain' %}
+                                                                                {% set attributes = attributes|merge({ 'data-object-fit': displayMode }) %}
+                                                                            {% endif %}
+
+                                                                            {% if isProduct %}
+                                                                                {% set attributes = attributes|merge({ 'itemprop': 'image' }) %}
+                                                                            {% endif %}
+
+                                                                            {% sw_thumbnails 'gallery-slider-image-thumbnails' with {
+                                                                                media: image
+                                                                            } %}
+                                                                        </div>
+                                                                    </div>
+                                                                {% endblock %}
+                                                            {% endfor %}
+                                                        {% endblock %}
+                                                    </div>
+                                                {% endblock %}
+
+                                                {% block element_image_gallery_inner_controls %}
+                                                    {% if navigationArrows %}
+                                                        <div class="gallery-slider-controls"
+                                                             data-gallery-slider-controls="{% if navigationArrows %}true{% else %}false{% endif %}">
+                                                            {% block element_image_gallery_inner_control_items %}
+                                                                {% block element_image_gallery_inner_control_prev %}
+                                                                    <button class="base-slider-controls-prev gallery-slider-controls-prev{% if navigationArrows == "outside" %} is-nav-prev-outside{% elseif navigationArrows == "inside" %} is-nav-prev-inside{% endif %}"
+                                                                            aria-label="{{ 'general.previous'|trans|striptags }}">
+                                                                        {% block element_image_gallery_inner_control_prev_icon %}
+                                                                            {% sw_icon 'arrow-head-left' %}
+                                                                        {% endblock %}
+                                                                    </button>
+                                                                {% endblock %}
+
+                                                                {% block element_image_gallery_inner_control_next %}
+                                                                    <button class="base-slider-controls-next gallery-slider-controls-next{% if navigationArrows == "outside" %} is-nav-next-outside{% elseif navigationArrows == "inside" %} is-nav-next-inside{% endif %}"
+                                                                            aria-label="{{ 'general.next'|trans|striptags }}">
+                                                                        {% block element_image_gallery_inner_control_next_icon %}
+                                                                            {% sw_icon 'arrow-head-right' %}
+                                                                        {% endblock %}
+                                                                    </button>
+                                                                {% endblock %}
+                                                            {% endblock %}
+                                                        </div>
+                                                    {% endif %}
+                                                {% endblock %}
+                                            {% endblock %}
+                                        {% else %}
+                                            {% block element_image_gallery_inner_single %}
+                                                <div class="gallery-slider-single-image is-{{ displayMode }} js-magnifier-container"{% if minHeight %} style="min-height: {{ minHeight }}"{% endif %}>
+                                                    {% if imageCount > 0 %}
+                                                        {% set attributes = {
+                                                            'class': 'img-fluid gallery-slider-image magnifier-image js-magnifier-image',
+                                                            'alt': (mediaItems|first.translated.alt ?: fallbackImageTitle),
+                                                            'title': (mediaItems|first.translated.title ?: fallbackImageTitle),
+                                                            'data-full-image': mediaItems|first.url
+                                                        } %}
+
+                                                        {% if displayMode == 'cover' or displayMode == 'contain' %}
+                                                            {% set attributes = attributes|merge({ 'data-object-fit': displayMode }) %}
+                                                        {% endif %}
+
+                                                        {% if isProduct %}
+                                                            {% set attributes = attributes|merge({ 'itemprop': 'image' }) %}
+                                                        {% endif %}
+
+                                                        {% sw_thumbnails 'gallery-slider-image-thumbnails' with {
+                                                            media: mediaItems|first,
+                                                        } %}
+                                                    {% else %}
+                                                        {% sw_icon 'placeholder' style {
+                                                            'size': 'fluid'
+                                                        } %}
+                                                    {% endif %}
+                                                </div>
+                                            {% endblock %}
+                                        {% endif %}
+                                    {% endblock %}
+
+                                    {% block element_image_gallery_slider_dots %}
+                                        {% if imageCount > 1 and navigationDots %}
+                                            <div class="base-slider-dots {% if imageCount > maxItemsToShowNav %} hide-dots{% elseif imageCount > maxItemsToShowMobileNav %} hide-dots-mobile{% endif %}">
+                                                {% block element_image_gallery_slider_dots_buttons %}
+                                                    {% for image in mediaItems %}
+                                                        {% block element_image_gallery_slider_dots_button %}
+                                                            <button class="base-slider-dot"
+                                                                    data-nav-dot="{{ loop.index }}"
+                                                                    tabindex="-1"></button>
+                                                        {% endblock %}
+                                                    {% endfor %}
+                                                {% endblock %}
+                                            </div>
+                                        {% endif %}
+                                    {% endblock %}
+                                </div>
+                            </div>
+                        {% endblock %}
+
+                        {% block element_image_gallery_inner_thumbnails_col %}
+                            {% if imageCount > 1 %}
+                                <div class="gallery-slider-thumbnails-col{% if galleryPosition == "left" %} col-0 col-md-auto order-2 order-md-1 is-left{% elseif galleryPosition == "underneath" %} col-12 order-2 is-underneath{% endif %}">
+                                    <div class="gallery-slider-thumbnails-container{% if galleryPosition == "underneath" %} is-underneath{% endif %}">
+                                        {% block element_image_gallery_inner_thumbnails %}
+                                            <div class="gallery-slider-thumbnails{% if galleryPosition == "underneath" %} is-underneath{% endif %}"
+                                                 data-gallery-slider-thumbnails="true">
+                                                {% block element_image_gallery_inner_thumbnails_items %}
+                                                    {% for image in mediaItems %}
+                                                        {% block element_image_gallery_inner_thumbnails_item %}
+                                                            <div class="gallery-slider-thumbnails-item">
+                                                                {% block element_image_gallery_inner_thumbnails_item_inner %}
+                                                                    <div class="gallery-slider-thumbnails-item-inner">
+                                                                        {% set attributes = {
+                                                                            'class': 'gallery-slider-thumbnails-image',
+                                                                            'alt': (image.translated.alt ?: fallbackImageTitle),
+                                                                            'title': (image.translated.title ?: fallbackImageTitle)
+                                                                        } %}
+
+                                                                        {% if isProduct %}
+                                                                            {% set attributes = attributes|merge({ 'itemprop': 'image' }) %}
+                                                                        {% endif %}
+
+                                                                        {% sw_thumbnails 'gallery-slider-thumbnails-image-thumbnails' with {
+                                                                            media: image,
+                                                                            sizes: {
+                                                                                'default': '200px'
+                                                                            }
+                                                                        } %}
+                                                                    </div>
+                                                                {% endblock %}
+                                                            </div>
+                                                        {% endblock %}
+                                                    {% endfor %}
+                                                {% endblock %}
+                                            </div>
+                                        {% endblock %}
+
+                                        {% block element_image_gallery_inner_thumbnails_controls %}
+                                            <div data-thumbnail-slider-controls="true" class="gallery-slider-thumbnails-controls">
+                                                {% block element_image_gallery_inner_thumbnails_controls_prev %}
+                                                    <button class="base-slider-controls-prev gallery-slider-thumbnails-controls-prev">
+                                                        {% if galleryPosition == "left" %}
+                                                            {% sw_icon 'arrow-head-up' %}
+                                                        {% elseif galleryPosition == "underneath" %}
+                                                            {% sw_icon 'arrow-head-left' %}
+                                                        {% endif %}
+                                                    </button>
+                                                {% endblock %}
+
+                                                {% block element_image_gallery_inner_thumbnails_controls_next %}
+                                                    <button class="base-slider-controls-next gallery-slider-thumbnails-controls-next">
+                                                        {% if galleryPosition == "left" %}
+                                                            {% sw_icon 'arrow-head-down' %}
+                                                        {% elseif galleryPosition == "underneath" %}
+                                                            {% sw_icon 'arrow-head-right' %}
+                                                        {% endif %}
+                                                    </button>
+                                                {% endblock %}
+                                            </div>
+                                        {% endblock %}
+                                    </div>
+                                </div>
+                            {% endif %}
+                        {% endblock %}
+
+                        {% block element_image_gallery_inner_zoom_modal_wrapper %}
+                            {% if zoomModal %}
+                                <div class="zoom-modal-wrapper">
+                                    {% block element_image_gallery_inner_zoom_modal %}
+                                        <div class="modal is-fullscreen zoom-modal js-zoom-modal{% if imageCount is same as(1) %} no-thumbnails{% endif %}"
+                                             data-image-zoom-modal="true"
+                                             tabindex="-1"
+                                             role="dialog">
+                                            {% block element_image_gallery_inner_zoom_modal_dialog %}
+                                                <div class="modal-dialog"
+                                                     role="document">
+                                                    {% block element_image_gallery_inner_zoom_modal_content %}
+                                                        <div class="modal-content"{% if imageCount > 1 %} data-modal-gallery-slider="true"{% endif %}>
+                                                            {% block element_image_gallery_inner_zoom_modal_close_button %}
+                                                                <button type="button"
+                                                                        class="{{ modalCloseBtnClass }} close"
+                                                                        {{ dataBsDismissAttr }}="modal"
+                                                                        aria-label="Close">
+                                                                    {% block element_image_gallery_inner_zoom_modal_close_icon %}
+                                                                        {# @deprecated tag:v6.5.0 - Bootstrap v5 creates "x" symbol automatically via SVG background #}
+                                                                        {% if not feature('v6.5.0.0') %}
+                                                                            <span aria-hidden="true">
+                                                                                {% sw_icon 'x' style { 'size': 'sm' } %}
+                                                                            </span>
+                                                                        {% endif %}
+                                                                    {% endblock %}
+                                                                </button>
+                                                            {% endblock %}
+
+                                                            {% block element_image_gallery_inner_zoom_modal_body %}
+                                                                <div class="modal-body">
+
+                                                                    {% block element_image_gallery_inner_zoom_modal_action_buttons %}
+                                                                        <div class="zoom-modal-actions btn-group"
+                                                                             role="group"
+                                                                             aria-label="zoom actions">
+
+                                                                            {% block element_image_gallery_inner_zoom_modal_action_zoom_out %}
+                                                                                <button class="btn btn-light image-zoom-btn js-image-zoom-out">
+                                                                                    {% block element_image_gallery_inner_zoom_modal_action_zoom_out_icon %}
+                                                                                        {% sw_icon 'minus-circle' %}
+                                                                                    {% endblock %}
+                                                                                </button>
+                                                                            {% endblock %}
+
+                                                                            {% block element_image_gallery_inner_zoom_modal_action_zoom_reset %}
+                                                                                <button class="btn btn-light image-zoom-btn js-image-zoom-reset">
+                                                                                    {% block element_image_gallery_inner_zoom_modal_action_zoom_reset_icon %}
+                                                                                        {% sw_icon 'screen-minimize' %}
+                                                                                    {% endblock %}
+                                                                                </button>
+                                                                            {% endblock %}
+
+                                                                            {% block element_image_gallery_inner_zoom_modal_action_zoom_in %}
+                                                                                <button class="btn btn-light image-zoom-btn js-image-zoom-in">
+                                                                                    {% block element_image_gallery_inner_zoom_modal_action_zoom_in_icon %}
+                                                                                        {% sw_icon 'plus-circle' %}
+                                                                                    {% endblock %}
+                                                                                </button>
+                                                                            {% endblock %}
+                                                                        </div>
+                                                                    {% endblock %}
+
+                                                                    {% block element_image_gallery_inner_zoom_modal_slider %}
+                                                                        <div class="gallery-slider"
+                                                                             data-gallery-slider-container=true>
+                                                                            {% block element_image_gallery_inner_zoom_modal_slider_items %}
+                                                                                {% for image in mediaItems %}
+                                                                                    {% block element_image_gallery_inner_zoom_modal_slider_item %}
+                                                                                        <div class="gallery-slider-item">
+                                                                                            {% block element_image_gallery_inner_zoom_modal_slider_item_zoom_container %}
+                                                                                                <div class="image-zoom-container"
+                                                                                                     data-image-zoom="true">
+                                                                                                    {% block element_image_gallery_inner_zoom_modal_slider_item_image %}
+                                                                                                        {% sw_thumbnails 'gallery-slider-image-thumbnails' with {
+                                                                                                            media: image,
+                                                                                                            attributes: {
+                                                                                                                'class': 'gallery-slider-image js-image-zoom-element js-load-img',
+                                                                                                                'alt': (image.translated.alt ?: fallbackImageTitle),
+                                                                                                                'title': (image.translated.title ?: fallbackImageTitle)
+                                                                                                            },
+                                                                                                            load: false,
+                                                                                                            loadOriginalImage: true,
+                                                                                                            autoColumnSizes: false
+                                                                                                        } %}
+                                                                                                    {% endblock %}
+                                                                                                </div>
+                                                                                            {% endblock %}
+                                                                                        </div>
+                                                                                    {% endblock %}
+                                                                                {% endfor %}
+                                                                            {% endblock %}
+                                                                        </div>
+                                                                    {% endblock %}
+
+                                                                    {% block element_image_gallery_inner_zoom_modal_slider_controls %}
+                                                                        {% if imageCount > 1 %}
+                                                                            <div class="gallery-slider-controls"
+                                                                                 data-gallery-slider-controls="true">
+                                                                                {% block element_image_gallery_inner_zoom_modal_slider_control_prev %}
+                                                                                    <button class="base-slider-controls-prev gallery-slider-controls-prev"
+                                                                                            aria-label="{{ 'general.previous'|trans|striptags }}">
+                                                                                        {% block element_image_gallery_inner_zoom_modal_slider_control_prev_icon %}
+                                                                                            {% sw_icon 'arrow-head-left' %}
+                                                                                        {% endblock %}
+                                                                                    </button>
+                                                                                {% endblock %}
+
+                                                                                {% block element_image_gallery_inner_zoom_modal_slider_control_next %}
+                                                                                    <button class="base-slider-controls-next gallery-slider-controls-next"
+                                                                                            aria-label="{{ 'general.next'|trans|striptags }}">
+                                                                                        {% block element_image_gallery_inner_zoom_modal_slider_control_next_icon %}
+                                                                                            {% sw_icon 'arrow-head-right' %}
+                                                                                        {% endblock %}
+                                                                                    </button>
+                                                                                {% endblock %}
+                                                                            </div>
+                                                                        {% endif %}
+                                                                    {% endblock %}
+                                                                </div>
+                                                            {% endblock %}
+
+                                                            {% if imageCount > 1 %}
+                                                                {% block element_image_gallery_inner_zoom_modal_footer %}
+                                                                    <div class="modal-footer">
+                                                                        {% block element_image_gallery_inner_zoom_modal_thumbnails_controls %}
+                                                                            <div class="gallery-slider-modal-controls">
+                                                                                <div data-thumbnail-slider-controls="true" class="gallery-slider-modal-thumbnails">
+                                                                                    <button class="base-slider-controls-prev gallery-slider-thumbnails-controls-prev"
+                                                                                            aria-label="{{ 'general.previous'|trans|striptags }}">
+                                                                                        {% sw_icon 'arrow-head-left' %}
+                                                                                    </button>
+                                                                                    <button class="base-slider-controls-next gallery-slider-thumbnails-controls-next"
+                                                                                            aria-label="{{ 'general.next'|trans|striptags }}">
+                                                                                        {% sw_icon 'arrow-head-right' %}
+                                                                                    </button>
+                                                                                </div>
+                                                                            </div>
+                                                                        {% endblock %}
+
+                                                                        {% block element_image_gallery_inner_zoom_modal_thumbnails %}
+                                                                            <div class="gallery-slider-thumbnails"
+                                                                                 data-gallery-slider-thumbnails=true>
+                                                                                {% block element_image_gallery_inner_zoom_modal_thumbnails_items %}
+                                                                                    {% for image in mediaItems %}
+                                                                                        {% block element_image_gallery_inner_zoom_modal_thumbnails_item %}
+                                                                                            <div class="gallery-slider-thumbnails-item">
+                                                                                                {% block element_image_gallery_inner_zoom_modal_thumbnails_item_inner %}
+                                                                                                    <div class="gallery-slider-thumbnails-item-inner">
+                                                                                                        {% sw_thumbnails 'gallery-slider-thumbnails-image-thumbnails' with {
+                                                                                                            media: image,
+                                                                                                            sizes: {
+                                                                                                                'default': '200px'
+                                                                                                            },
+                                                                                                            attributes: {
+                                                                                                                'class': 'gallery-slider-thumbnails-image js-load-img',
+                                                                                                                'alt': (image.translated.alt ?: fallbackImageTitle),
+                                                                                                                'title': (image.translated.title ?: fallbackImageTitle)
+                                                                                                            },
+                                                                                                            load: false
+                                                                                                        } %}
+                                                                                                    </div>
+                                                                                                {% endblock %}
+                                                                                            </div>
+                                                                                        {% endblock %}
+                                                                                    {% endfor %}
+                                                                                {% endblock %}
+                                                                            </div>
+                                                                        {% endblock %}
+                                                                    </div>
+                                                                {% endblock %}
+                                                            {% endif %}
+                                                        </div>
+                                                    {% endblock %}
+                                                </div>
+                                            {% endblock %}
+                                        </div>
+                                    {% endblock %}
+                                </div>
+                            {% endif %}
+                        {% endblock %}
+                    </div>
+                {% endblock %}
+
+            {% if config.verticalAlign.value %}
+                </div>
+            {% endif %}
+        {% endblock %}
+    </div>
+{% endblock %}

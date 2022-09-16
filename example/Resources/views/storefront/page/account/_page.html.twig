@@ -1,0 +1,21 @@
+{% sw_extends '@Storefront/storefront/base.html.twig' %}
+
+{% block base_content %}
+    {% block page_account %}
+        <div class="account account-content">
+            {% block page_account_sidebar %}
+                <div class="account-content-aside">
+                    {% if context.customer and not context.customer.guest %}
+                        {% sw_include '@Storefront/storefront/page/account/sidebar.html.twig' %}
+                    {% endif %}
+                </div>
+            {% endblock %}
+
+            {% block page_account_main %}
+                <div class="account-content-main">
+                    {% block page_account_main_content %}{% endblock %}
+                </div>
+            {% endblock %}
+        </div>
+    {% endblock %}
+{% endblock %}

@@ -1,0 +1,18 @@
+/*
+Main navigation
+==============================================
+Custom styling for main navigation on larger screens.
+
+Based on bootstrap nav:
+https://getbootstrap.com/docs/4.3/components/navs/
+*/
+
+.main-navigation {
+    display: none;
+}
+
+@include media-breakpoint-up(lg) {
+    .main-navigation {
+        display: inherit;
+    }
+}

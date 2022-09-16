@@ -1,0 +1,35 @@
+/*
+CMS sections
+==============================================
+General styling for cms sections
+*/
+
+.cms-section {
+    overflow: hidden;
+
+    &.bg-image {
+        background-repeat: no-repeat;
+        background-position: 50%;
+    }
+
+    .boxed {
+        @extend .container;
+    }
+
+    .cms-section-sidebar {
+        display: flex;
+    }
+}
+
+// @deprecated tag:v6.5.0 - Bootstrap v5 uses the breakpoint itself instead of the next breakpoint in `media-breakpoint-down()`, use `md` instead of `sm`.
+@include media-breakpoint-down(if(feature('v6.5.0.0'), md, sm)) {
+    .cms-section-sidebar-mobile-wrap {
+        flex-direction: column;
+    }
+
+    .cms-section-sidebar-mobile-hidden {
+        .cms-section-sidebar-sidebar-content {
+            display: none;
+        }
+    }
+}

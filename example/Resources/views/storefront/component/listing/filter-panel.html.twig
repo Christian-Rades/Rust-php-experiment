@@ -1,0 +1,106 @@
+{% block component_filter_panel %} {# merge 16.11.20 #}
+    {% block component_filter_panel_header %}
+        <div class="filter-panel-offcanvas-header">
+            <div class="filter-panel-offcanvas-only filter-panel-offcanvas-title">{{ "listing.filterTitleText"|trans }}</div>
+
+            <div class="filter-panel-offcanvas-only filter-panel-offcanvas-close js-offcanvas-close">
+                {% sw_icon 'x' style { 'size': 'md' } %}
+            </div>
+        </div>
+    {% endblock %}
+
+    {# @var listing \Shopware\Core\Framework\DataAbstractionLayer\Search\EntitySearchResult #}
+    {% block component_filter_panel_element %}
+        <div class="filter-panel{% if sidebar %} is--sidebar{% endif %}">
+            {% block component_filter_panel_items_container %}
+                <div class="filter-panel-items-container">
+                    {% block component_filter_panel_items %}
+
+                        {% block component_filter_panel_item_manufacturer %}
+                            {# @var manufacturers \Shopware\Core\Framework\DataAbstractionLayer\Search\AggregationResult\Metric\EntityResult #}
+                            {% set manufacturers = listing.aggregations.get('manufacturer') %}
+                            {% if not manufacturers.entities is empty %}
+                                {% set manufacturersSorted = manufacturers.entities|sort((a, b) => a.translated.name|lower <=> b.translated.name|lower) %}
+
+                                {% sw_include '@Storefront/storefront/component/listing/filter/filter-multi-select.html.twig' with {
+                                    elements: manufacturersSorted,
+                                    sidebar: sidebar,
+                                    name: 'manufacturer',
+                                    displayName: 'listing.filterManufacturerDisplayName'|trans|sw_sanitize
+                                } %}
+                            {% endif %}
+                        {% endblock %}
+
+                        {% block component_filter_panel_item_properties %}
+                            {# @var properties \Shopware\Core\Framework\DataAbstractionLayer\Search\AggregationResult\Metric\EntityResult #}
+                            {% set properties = listing.aggregations.get('properties') %}
+
+                            {% if not properties.entities is empty %}
+                                {% for property in properties.entities %}
+                                    {% sw_include '@Storefront/storefront/component/listing/filter/filter-property-select.html.twig' with {
+                                        elements: property.options,
+                                        sidebar: sidebar,
+                                        name: 'properties',
+                                        displayName: property.translated.name,
+                                        displayType: property.displayType,
+                                        pluginSelector: 'filter-property-select',
+                                        propertyName: property.translated.name
+                                    } %}
+                                {% endfor %}
+                            {% endif %}
+                        {% endblock %}
+
+                        {% block component_filter_panel_item_price %}
+                            {% set price = listing.aggregations.get('price') %}
+
+                            {% if price.min !== null and price.max !== null %}
+                                {# '@deprecated tag:v6.5.0 - Variable `price` will no longer be required by filter-range.html.twig - Use `minInputValue` and `maxInputValue` instead.' #}
+                                {% sw_include '@Storefront/storefront/component/listing/filter/filter-range.html.twig' with {
+                                    price: price,
+                                    sidebar: sidebar,
+                                    name: 'price',
+                                    minKey: 'min-price',
+                                    maxKey: 'max-price',
+                                    lowerBound: 0,
+                                    displayName: 'listing.filterPriceDisplayName'|trans|sw_sanitize,
+                                    minInputValue: 0,
+                                    maxInputValue: price.max,
+                                } %}
+                            {% endif %}
+                        {% endblock %}
+
+                        {% block component_filter_panel_item_rating_select %}
+                            {% set rating = listing.aggregations.get('rating') %}
+
+                            {% if rating.max > 0 %}
+                                {% sw_include '@Storefront/storefront/component/listing/filter/filter-rating-select.html.twig' with {
+                                    sidebar: sidebar,
+                                    name: 'rating',
+                                    pluginSelector: 'filter-rating-select',
+                                    displayName: 'listing.filterRatingDisplayName'|trans|sw_sanitize
+                                } %}
+                            {% endif %}
+                        {% endblock %}
+
+                        {% block component_filter_panel_item_shipping_free %}
+                            {% set shippingFree = listing.aggregations.get('shipping-free') %}
+
+                            {% if shippingFree.max > 0 %}
+                                {% sw_include '@Storefront/storefront/component/listing/filter/filter-boolean.html.twig' with {
+                                    name: 'shipping-free',
+                                    displayName: 'listing.filterFreeShippingDisplayName'|trans|sw_sanitize
+                                } %}
+                            {% endif %}
+                        {% endblock %}
+                    {% endblock %}
+                </div>
+            {% endblock %}
+
+            {% block component_filter_panel_active_container %}
+                <div class="filter-panel-active-container">
+                    {% block component_filter_panel_active_container_inner %}{% endblock %}
+                </div>
+            {% endblock %}
+        </div>
+     {% endblock %}
+{% endblock %}
