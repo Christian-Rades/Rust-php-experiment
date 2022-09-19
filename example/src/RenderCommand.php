@@ -28,6 +28,7 @@ class RenderCommand extends Command
         $template = $twig->load('basic.html.twig');
         $name = 'christian';
 //        $output->writeln(\hello_world($name));
+        $output->writeln(getcwd());
         $output->write(\read_file(__DIR__ . '/../Resources/views/test/basic.html.twig', [
             'foo' => new foo(),
             'coll' => ['first', 'second', 'third'],

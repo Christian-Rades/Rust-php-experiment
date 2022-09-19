@@ -6,7 +6,7 @@ use nom::{
     bytes::complete::{tag, take_until, take_until1, take_till, take_while},
     multi::{many0, many1, many_till},
     sequence::{delimited, tuple},
-    IResult, character::{complete::multispace1, is_space},
+    IResult, character::{complete::{multispace1, one_of}, is_space},
 };
 
 
@@ -24,9 +24,11 @@ struct Variable {
     name: String
 }
 
+#[derive(Debug)]
 enum BlockTag {
     BlockName(String),
     Loop(Loop),
+    Include(String),
     Undefined
 }
 struct Block {
@@ -34,6 +36,7 @@ struct Block {
     tag: BlockTag
 }
 
+#[derive(Debug)]
 struct Loop {
     varname: String,
     collection_name: String
@@ -126,6 +129,9 @@ fn parse_block(t: &str) -> IResult<&str, Box<dyn Renderer>> {
                 tag: blockTag
             })))
         }
+        BlockTag::Include(_) => {
+            Ok((rest, Box::new(Block {children: Vec::default(), tag: blockTag})))
+        }
         BlockTag::Undefined => {
             Ok((rest, Box::new(Block{children: Vec::default(), tag: blockTag})))
         }
@@ -133,7 +139,7 @@ fn parse_block(t: &str) -> IResult<&str, Box<dyn Renderer>> {
 }
 
 fn parse_block_tag(t: &str) -> IResult<&str, BlockTag> {
-    let (rest, block) = delimited(tag("{%"), alt((parse_block_name, parse_block_loop, parse_block_undefined)), tag("%}"))(t)?;
+    let (rest, block) = delimited(tag("{%"), alt((parse_block_name, parse_block_loop, parse_block_include, parse_block_undefined)), tag("%}"))(t)?;
 
     Ok((rest, block))
 }
@@ -142,6 +148,12 @@ fn parse_block_name(t: &str) -> IResult<&str, BlockTag> {
     let (rest, (_,_,_,name,_, _)) = tuple((multispace1, tag("block"), multispace1, take_till(|c| c == ' '), multispace1, take_until("%}")))(t)?;
 
     Ok((rest, BlockTag::BlockName(name.to_string())))
+}
+
+fn parse_block_include(t: &str) -> IResult<&str, BlockTag> {
+    let (rest, (_,_include,_,_,name,_,_, _)) = tuple((multispace1, tag("include"), multispace1,one_of("'\""), take_till(|c| c == '\'' || c == '"'), one_of("'\""), multispace1, take_until("%}")))(t)?;
+
+    Ok((rest, BlockTag::Include(name.to_string())))
 }
 
 fn parse_block_loop(t: &str) -> IResult<&str, BlockTag> {
@@ -190,6 +202,18 @@ impl Renderer for Block {
                     env.set(&lp.varname, val.string().unwrap());
                     self.children.render(buf, env)
                 }
+            }
+            BlockTag::Include(template) =>  {
+                let path = PathBuf::from(template);
+                let mut file = File::open(&path).unwrap();
+                let mut content = String::new();
+                file.read_to_string(&mut content);
+                match parse(&content) {
+                    Ok((_, n)) => {
+                        n.render(buf, env);
+                    },
+                    Err(e) => {write!(buf, "{}", e);},
+                };
             }
             _=> ()}
     }
