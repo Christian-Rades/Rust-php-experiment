@@ -9,6 +9,11 @@ use Symfony\Component\Console\Output\OutputInterface;
 use Twig\Environment;
 use Twig\Loader\FilesystemLoader;
 
+
+class foo {
+    public $name = "foo";
+}
+
 #[AsCommand(
     name: 'render',
     description: 'renders a template',
@@ -22,9 +27,12 @@ class RenderCommand extends Command
         $twig = new Environment($loader,[]);
         $template = $twig->load('basic.html.twig');
         $name = 'christian';
-        $output->writeln(\hello_world($name));
-        $output->write(\read_file(__DIR__ . '/../Resources/views/test/basic.html.twig'));
-        $output->writeln($template->render(['name' => $name]));
+//        $output->writeln(\hello_world($name));
+        $output->write(\read_file(__DIR__ . '/../Resources/views/test/basic.html.twig', [
+            'foo' => new foo(),
+            'coll' => ['first', 'second', 'third'],
+        ]));
+//        $output->writeln($template->render(['name' => $name]));
         return Command::SUCCESS;
     }
 }

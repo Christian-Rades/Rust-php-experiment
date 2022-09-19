@@ -2,4 +2,10 @@
 <!DOCTYPE html>
 {% endblock %}
 
-<h1>HELLO {{ name }}</h1>
+{% for test in coll %}
+pre
+{{ test }}
+post
+{% endfor %}
+
+<h1>HELLO {{ foo.name }}</h1>
