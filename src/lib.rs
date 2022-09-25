@@ -1,4 +1,4 @@
-use std::{collections::{HashMap, VecDeque}, fs::{self, File}, path::{self, PathBuf}, io::Read, fmt::Write};
+use std::{collections::{HashMap, VecDeque}, fs::{self, File}, path::{self, PathBuf, Path}, io::Read, fmt::Write, any::Any};
 
 use ext_php_rs::{prelude::*, types::{ZendObject, Zval}, boxed::ZBox};
 use nom::{
@@ -10,18 +10,14 @@ use nom::{
 };
 
 
-type NodeList = Vec<Box<dyn Renderer>>;
+type NodeList = Vec<Content>;
 
 struct Module {
     children: NodeList
 }
 
-struct Body {
-    content: String
-}
-
-struct Variable {
-    name: String
+struct Extends {
+    blocks: NodeList
 }
 
 #[derive(Debug)]
@@ -29,17 +25,25 @@ enum BlockTag {
     BlockName(String),
     Loop(Loop),
     Include(String),
+    Extends(String),
     Undefined
-}
-struct Block {
-    children: NodeList,
-    tag: BlockTag
 }
 
 #[derive(Debug)]
 struct Loop {
     varname: String,
     collection_name: String
+}
+
+enum Content {
+    Text(String),
+    Var(String),
+    Block(Block)
+}
+
+struct Block {
+    tag: BlockTag,
+    children: Vec<Content>
 }
 
 struct Environment<'a> {
@@ -52,8 +56,6 @@ struct StackFrame {
     vals: HashMap<String, String>
 }
 
-
-
 #[php_function]
 pub fn hello_world(name: &str) -> String {
     format!("Hello, {}!", name)
@@ -62,16 +64,8 @@ pub fn hello_world(name: &str) -> String {
 #[php_function]
 pub fn read_file(path: &str, data: &mut Zval) -> String {
     let path = PathBuf::from(path);
-    let f_result = File::open(&path);
-    let mut file = if let Ok(f) = f_result {
-        f
-    } else {
-        return String::new();
-    };
-    let mut buf = String::new();
-    file.read_to_string(&mut buf);
-    match parse(&buf) {
-        Ok((_, n)) => {
+    match file_to_ast(&path) {
+        Ok(n) => {
             let mut out = String::default();
             let mut env = Environment {
                 stack: Vec::default(),
@@ -84,6 +78,13 @@ pub fn read_file(path: &str, data: &mut Zval) -> String {
     }
 }
 
+fn file_to_ast(path: &Path) -> Result<Module, Box<dyn std::error::Error> > {
+    let mut f = File::open(path)?;
+    let mut buf = String::default();
+    f.read_to_string(&mut buf)?;
+    parse(&buf).map(|(_,module)| module).map_err(|e| e.to_string().into())
+}
+
 
 fn parse(t: &str) -> IResult<&str, Module> {
     let mut n = Module {
@@ -94,52 +95,55 @@ fn parse(t: &str) -> IResult<&str, Module> {
     Ok((rest, n))
 }
 
-fn parse_content(t: &str) -> IResult<&str, Box<dyn Renderer>> {
+fn parse_content(t: &str) -> IResult<&str, Content> {
 
     let (rest, content) = alt((parse_variable, parse_block, parse_body))(t)?;
     Ok((rest, content))
 }
 
-fn parse_body(t: &str) -> IResult<&str, Box<dyn Renderer>> {
+fn parse_body(t: &str) -> IResult<&str, Content> {
     let (rest, content) = take_while(|c| { c != '{'})(t)?;
 
-    Ok((rest, Box::new(Body{ content: content.to_string()})))
+    Ok((rest, Content::Text(content.to_string())))
 }
 
-fn parse_variable(t: &str) -> IResult<&str, Box<dyn Renderer>> {
+fn parse_variable(t: &str) -> IResult<&str, Content> {
     let (rest, var) = delimited(tag("{{"), take_until("}}"), tag("}}"))(t)?;
     
-    Ok((rest, Box::new(Variable{name: var.trim().to_string()})))
+    Ok((rest, Content::Var(var.trim().to_string())))
 }
 
-fn parse_block(t: &str) -> IResult<&str, Box<dyn Renderer>> {
+fn parse_block(t: &str) -> IResult<&str, Content> {
     let (rest, blockTag) = parse_block_tag(t)?;
     match blockTag {
         BlockTag::Loop(_) => {
             let (rest, (children, _)) = many_till(parse_content, tag("{% endfor %}"))(rest)?;
-            Ok((rest, Box::new(Block {
+            Ok((rest, Content::Block(Block {
                 children,
-                tag: blockTag
+                tag: blockTag,
             })))
         },
         BlockTag::BlockName(_) => {
             let (rest, (children, _)) = many_till(parse_content, tag("{% endblock %}"))(rest)?;
-            Ok((rest, Box::new(Block {
+            Ok((rest, Content::Block(Block {
                 children,
-                tag: blockTag
+                tag: blockTag,
             })))
         }
+        BlockTag::Extends(_) => {
+            Ok((rest, Content::Block(Block {children: Vec::default(), tag: blockTag})))
+        }
         BlockTag::Include(_) => {
-            Ok((rest, Box::new(Block {children: Vec::default(), tag: blockTag})))
+            Ok((rest, Content::Block(Block {children: Vec::default(), tag: blockTag})))
         }
         BlockTag::Undefined => {
-            Ok((rest, Box::new(Block{children: Vec::default(), tag: blockTag})))
+            Ok((rest, Content::Block(Block{children: Vec::default(), tag: blockTag})))
         }
     }
 }
 
 fn parse_block_tag(t: &str) -> IResult<&str, BlockTag> {
-    let (rest, block) = delimited(tag("{%"), alt((parse_block_name, parse_block_loop, parse_block_include, parse_block_undefined)), tag("%}"))(t)?;
+    let (rest, block) = delimited(tag("{%"), alt((parse_block_name, parse_block_loop, parse_block_include, parse_block_extends, parse_block_undefined)), tag("%}"))(t)?;
 
     Ok((rest, block))
 }
@@ -154,6 +158,12 @@ fn parse_block_include(t: &str) -> IResult<&str, BlockTag> {
     let (rest, (_,_include,_,_,name,_,_, _)) = tuple((multispace1, tag("include"), multispace1,one_of("'\""), take_till(|c| c == '\'' || c == '"'), one_of("'\""), multispace1, take_until("%}")))(t)?;
 
     Ok((rest, BlockTag::Include(name.to_string())))
+}
+
+fn parse_block_extends(t: &str) -> IResult<&str, BlockTag> {
+    let (rest, (_,_extends,_,_,name,_,_, _)) = tuple((multispace1, tag("extends"), multispace1,one_of("'\""), take_till(|c| c == '\'' || c == '"'), one_of("'\""), multispace1, take_until("%}")))(t)?;
+
+    Ok((rest, BlockTag::Extends(name.to_string())))
 }
 
 fn parse_block_loop(t: &str) -> IResult<&str, BlockTag> {
@@ -172,23 +182,17 @@ fn parse_block_undefined(t: &str) -> IResult<&str, BlockTag> {
     Ok((rest, BlockTag::Undefined))
 }
 
-trait Renderer {
-    fn render(&self, buf: &mut String, env: &mut Environment);
-}
-
-impl Renderer for Variable {
+impl Content {
     fn render(&self, buf: &mut String, env: &mut Environment) {
-        write!(buf,"{}", env.get(&self.name).unwrap_or_default());
+        match self {
+            Content::Text(txt) => write!(buf, "{}", txt),
+            Content::Var(name) => write!(buf,"{}", env.get(name).unwrap_or_default()),
+            Content::Block(block) => { block.render(buf, env); Ok(())}
+        }.unwrap();
     }
 }
 
-impl Renderer for Body {
-    fn render(&self, buf: &mut String, env: &mut Environment) {
-        write!(buf, "{}", &self.content);
-    }
-}
-
-impl Renderer for Block {
+impl Block {
     fn render(&self, buf: &mut String, env: &mut Environment) {
         env.push(StackFrame{variables: None, vals: HashMap::default()});
         match &self.tag {
@@ -205,11 +209,8 @@ impl Renderer for Block {
             }
             BlockTag::Include(template) =>  {
                 let path = PathBuf::from(template);
-                let mut file = File::open(&path).unwrap();
-                let mut content = String::new();
-                file.read_to_string(&mut content);
-                match parse(&content) {
-                    Ok((_, n)) => {
+                match file_to_ast(&path) {
+                    Ok(n) => {
                         n.render(buf, env);
                     },
                     Err(e) => {write!(buf, "{}", e);},
@@ -217,9 +218,20 @@ impl Renderer for Block {
             }
             _=> ()}
     }
+
+    fn block_name(&self) -> Option<String> {
+        match &self.tag {
+            BlockTag::BlockName(name) => Some(name.to_owned()),
+            _ => None
+        }
+    }
 }
 
-impl Renderer for NodeList {
+trait Render {
+    fn render(&self,buf: &mut String, env: &mut Environment);
+}
+
+impl Render for NodeList {
     fn render(&self, buf: &mut String, env: &mut Environment) {
         for x in self.iter() {
             x.render(buf, env)
@@ -227,11 +239,12 @@ impl Renderer for NodeList {
     }
 }
 
-impl Renderer for Module {
+impl Module {
     fn render(&self, buf: &mut String, env: &mut Environment) {
         self.children.render(buf, env)
     }
 }
+
 
 impl<'a> Environment<'a>  {
     fn push(&mut self, frame: StackFrame) {
