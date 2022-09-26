@@ -1,4 +1,4 @@
-use std::{collections::{HashMap, VecDeque}, fs::{self, File}, path::{self, PathBuf, Path}, io::Read, fmt::Write, any::Any};
+use std::{collections::{HashMap, VecDeque}, fs::{self, File}, path::{self, PathBuf, Path}, io::Read, fmt::Write, any::Any, hash::Hash};
 
 use ext_php_rs::{prelude::*, types::{ZendObject, Zval}, boxed::ZBox};
 use nom::{
@@ -12,12 +12,17 @@ use nom::{
 
 type NodeList = Vec<Content>;
 
+enum Template {
+    Module(Module),
+    Extends(Extends)
+}
 struct Module {
     children: NodeList
 }
 
 struct Extends {
-    blocks: NodeList
+    parent: String,
+    blocks: HashMap<String, Content>
 }
 
 #[derive(Debug)]
@@ -25,7 +30,6 @@ enum BlockTag {
     BlockName(String),
     Loop(Loop),
     Include(String),
-    Extends(String),
     Undefined
 }
 
@@ -38,16 +42,19 @@ struct Loop {
 enum Content {
     Text(String),
     Var(String),
-    Block(Block)
+    Block(Box<Block>),
+    Parent(Option<Box<Block>>)
 }
 
 struct Block {
     tag: BlockTag,
-    children: Vec<Content>
+    children: Vec<Content>,
+    parent: Option<Box<Block>>
 }
 
 struct Environment<'a> {
     base: &'a mut Zval,
+    basedir: PathBuf,
     stack: Vec<StackFrame>
 }
 
@@ -62,23 +69,39 @@ pub fn hello_world(name: &str) -> String {
 }
 
 #[php_function]
-pub fn read_file(path: &str, data: &mut Zval) -> String {
-    let path = PathBuf::from(path);
-    match file_to_ast(&path) {
-        Ok(n) => {
+pub fn read_file(basedir: &str, path: &str, data: &mut Zval) -> String {
+    let basepath = PathBuf::from(basedir);
+    let path = basepath.join(PathBuf::from(path));
+    let mut template = match file_to_ast(&path) {
+        Ok(tpl) => tpl,
+        Err(e) => return format!("{}", e)
+    };
+    let mut extensions = Extends{parent: String::default(), blocks: HashMap::default()};
+    while let Template::Extends(extends) = template {
+        extensions = extensions.add(extends);
+        let parent_path = basepath.join(PathBuf::from(&extensions.parent));
+        template = match file_to_ast(&parent_path) {
+            Ok(tpl) => tpl,
+            Err(e) => return format!("error reading {} -> {}", parent_path.display(), e)
+        };
+    }
+    match template {
+        Template::Module(mut module) => {
+            module.apply_extensions(extensions);
             let mut out = String::default();
             let mut env = Environment {
                 stack: Vec::default(),
-                base: data
+                base: data,
+                basedir: basepath
             };
-            n.render(&mut out, &mut env);
+            module.render(&mut out, &mut env);
             out
         },
-        Err(e) => format!("{}", e)
+        Template::Extends(extends) => format!("what??? {}", extends.parent)
     }
 }
 
-fn file_to_ast(path: &Path) -> Result<Module, Box<dyn std::error::Error> > {
+fn file_to_ast(path: &Path) -> Result<Template, Box<dyn std::error::Error> > {
     let mut f = File::open(path)?;
     let mut buf = String::default();
     f.read_to_string(&mut buf)?;
@@ -86,18 +109,36 @@ fn file_to_ast(path: &Path) -> Result<Module, Box<dyn std::error::Error> > {
 }
 
 
-fn parse(t: &str) -> IResult<&str, Module> {
-    let mut n = Module {
+fn parse(t: &str) -> IResult<&str, Template> {
+    if let Ok((rest, extends)) = parse_extends(t) {
+        let mut root = extends;
+        let (rest, (children, _)) = many_till(parse_content, nom::combinator::eof)(rest)?;
+        for child in children.into_iter() {
+            match &child {
+                Content::Block(block) => {
+                    match &block.tag {
+                        BlockTag::BlockName(name) => {
+                            root.blocks.insert(name.to_string(), child);
+                        }
+                        _ => (),
+                    }
+                },
+                _ => ()
+            }
+        }
+        return Ok((rest, Template::Extends(root)));
+    } 
+    let mut root = Module {
         children: Vec::default(),
     };
     let (rest, (children, _)) = many_till(parse_content, nom::combinator::eof)(t)?;
-    n.children = children;
-    Ok((rest, n))
+    root.children = children;
+    Ok((rest, Template::Module(root)))
 }
 
 fn parse_content(t: &str) -> IResult<&str, Content> {
 
-    let (rest, content) = alt((parse_variable, parse_block, parse_body))(t)?;
+    let (rest, content) = alt((parse_parent, parse_variable, parse_block, parse_body))(t)?;
     Ok((rest, content))
 }
 
@@ -113,37 +154,43 @@ fn parse_variable(t: &str) -> IResult<&str, Content> {
     Ok((rest, Content::Var(var.trim().to_string())))
 }
 
+
+fn parse_parent(t: &str) -> IResult<&str, Content> {
+    let (rest, _) = delimited(tuple((tag("{{"), multispace1)), tag("parent()"), tuple((multispace1, tag("}}"))))(t)?;
+    
+    Ok((rest, Content::Parent(None)))
+}
+
 fn parse_block(t: &str) -> IResult<&str, Content> {
     let (rest, blockTag) = parse_block_tag(t)?;
     match blockTag {
         BlockTag::Loop(_) => {
             let (rest, (children, _)) = many_till(parse_content, tag("{% endfor %}"))(rest)?;
-            Ok((rest, Content::Block(Block {
+            Ok((rest, Content::Block(Box::new(Block {
                 children,
                 tag: blockTag,
-            })))
+                parent: None
+            }))))
         },
         BlockTag::BlockName(_) => {
             let (rest, (children, _)) = many_till(parse_content, tag("{% endblock %}"))(rest)?;
-            Ok((rest, Content::Block(Block {
+            Ok((rest, Content::Block(Box::new(Block {
                 children,
                 tag: blockTag,
-            })))
-        }
-        BlockTag::Extends(_) => {
-            Ok((rest, Content::Block(Block {children: Vec::default(), tag: blockTag})))
+                parent: None
+            }))))
         }
         BlockTag::Include(_) => {
-            Ok((rest, Content::Block(Block {children: Vec::default(), tag: blockTag})))
+            Ok((rest, Content::Block(Box::new(Block {children: Vec::default(), tag: blockTag, parent: None}))))
         }
         BlockTag::Undefined => {
-            Ok((rest, Content::Block(Block{children: Vec::default(), tag: blockTag})))
+            Ok((rest, Content::Block(Box::new(Block{children: Vec::default(), tag: blockTag, parent: None}))))
         }
     }
 }
 
 fn parse_block_tag(t: &str) -> IResult<&str, BlockTag> {
-    let (rest, block) = delimited(tag("{%"), alt((parse_block_name, parse_block_loop, parse_block_include, parse_block_extends, parse_block_undefined)), tag("%}"))(t)?;
+    let (rest, block) = delimited(tag("{%"), alt((parse_block_name, parse_block_loop, parse_block_include, parse_block_undefined)), tag("%}"))(t)?;
 
     Ok((rest, block))
 }
@@ -160,10 +207,10 @@ fn parse_block_include(t: &str) -> IResult<&str, BlockTag> {
     Ok((rest, BlockTag::Include(name.to_string())))
 }
 
-fn parse_block_extends(t: &str) -> IResult<&str, BlockTag> {
-    let (rest, (_,_extends,_,_,name,_,_, _)) = tuple((multispace1, tag("extends"), multispace1,one_of("'\""), take_till(|c| c == '\'' || c == '"'), one_of("'\""), multispace1, take_until("%}")))(t)?;
+fn parse_extends(t: &str) -> IResult<&str, Extends> {
+    let (rest, (_, _extends,_,_,name,_,_)) = delimited(tag("{%"), tuple((multispace1, tag("extends"), multispace1,one_of("'\""), take_till(|c| c == '\'' || c == '"'), one_of("'\""), multispace1)), tag("%}"))(t)?;
 
-    Ok((rest, BlockTag::Extends(name.to_string())))
+    Ok((rest, Extends{parent: name.to_string(), blocks: HashMap::default()}))
 }
 
 fn parse_block_loop(t: &str) -> IResult<&str, BlockTag> {
@@ -187,7 +234,9 @@ impl Content {
         match self {
             Content::Text(txt) => write!(buf, "{}", txt),
             Content::Var(name) => write!(buf,"{}", env.get(name).unwrap_or_default()),
-            Content::Block(block) => { block.render(buf, env); Ok(())}
+            Content::Block(block) => { block.render(buf, env); Ok(())},
+            Content::Parent(Some(parent)) => { parent.render(buf, env); Ok(())}
+            Content::Parent(None) => write!(buf, "MISSING PARENT BLOCK")
         }.unwrap();
     }
 }
@@ -208,11 +257,12 @@ impl Block {
                 }
             }
             BlockTag::Include(template) =>  {
-                let path = PathBuf::from(template);
+                let path = env.basedir.join(PathBuf::from(template));
                 match file_to_ast(&path) {
-                    Ok(n) => {
+                    Ok(Template::Module(n)) => {
                         n.render(buf, env);
                     },
+                    Ok(Template::Extends(_)) => {write!(buf, "inlcude extends not supported yet");}
                     Err(e) => {write!(buf, "{}", e);},
                 };
             }
@@ -240,11 +290,54 @@ impl Render for NodeList {
 }
 
 impl Module {
+    fn apply_extensions(&mut self, mut exts: Extends) {
+        // TODO make recusive
+        for child in self.children.iter_mut() {
+            if let Content::Block(pblock) = child  {
+                if let BlockTag::BlockName(name) = &pblock.tag {
+                    if let Some(Content::Block(mut ext)) = exts.blocks.remove(name) {
+                        std::mem::swap(pblock, &mut ext);
+                        let parent = ext;
+                        extend_block(parent, pblock)
+                    }
+                }
+            }
+        }
+    }
     fn render(&self, buf: &mut String, env: &mut Environment) {
         self.children.render(buf, env)
     }
 }
 
+impl Extends {
+    fn add(self, other: Self) -> Self {
+        let Extends{blocks: mut sum, parent: _} = self;
+        for (name, element) in other.blocks.into_iter() {
+            if let Content::Block(parent) = element {
+                if let Some(Content::Block(ref mut child)) = sum.get_mut(&name) {
+                    extend_block(parent,child);
+                } else {sum.insert(name, Content::Block(parent));}
+            }
+        }
+        Extends { parent: other.parent, blocks: sum }
+    }
+}
+
+fn extend_block(parent: Box<Block>,child: &mut Block) {
+    for elem in child.children.iter_mut() {
+        match elem {
+            Content::Parent(None) => { 
+                *elem = Content::Parent(Some(parent)); 
+                return;
+            },
+            Content::Parent(Some(block)) => {
+                extend_block(parent, block);
+                return;
+            },
+            _ => ()
+        }
+    }
+}
 
 impl<'a> Environment<'a>  {
     fn push(&mut self, frame: StackFrame) {
