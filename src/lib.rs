@@ -1,12 +1,12 @@
-use std::{collections::{HashMap, VecDeque}, fs::{self, File}, path::{self, PathBuf, Path}, io::Read, fmt::Write, any::Any, hash::Hash};
+use std::{collections::HashMap, fs::File, path::{PathBuf, Path}, io::Read, fmt::Write};
 
-use ext_php_rs::{prelude::*, types::{ZendObject, Zval}, boxed::ZBox};
+use ext_php_rs::{prelude::*, types::{Zval, ZendObject, ZendHashTable}, call_user_func, flags::DataType, error::Result, convert::IntoZval};
 use nom::{
     branch::alt,
-    bytes::complete::{tag, take_until, take_until1, take_till, take_while},
-    multi::{many0, many1, many_till},
+    bytes::complete::{tag, take_until, take_till, take_while},
+    multi::many_till,
     sequence::{delimited, tuple},
-    IResult, character::{complete::{multispace1, one_of}, is_space},
+    IResult, character::complete::{multispace1, one_of},
 };
 
 
@@ -49,18 +49,38 @@ enum Content {
 struct Block {
     tag: BlockTag,
     children: Vec<Content>,
-    parent: Option<Box<Block>>
 }
 
 struct Environment<'a> {
     base: &'a mut Zval,
     basedir: PathBuf,
-    stack: Vec<StackFrame>
+    stack: Vec<StackFrame>,
 }
 
 struct StackFrame {
     variables: Option<Zval>,
     vals: HashMap<String, String>
+}
+
+struct ObjAsParamHack{inner: Zval}
+
+impl Clone for ObjAsParamHack {
+    fn clone(&self) -> Self {
+        Self { inner: self.inner.shallow_clone() }
+    }
+}
+
+impl IntoZval for ObjAsParamHack {
+    const TYPE: DataType = DataType::Reference;
+    fn into_zval(self, _persistend: bool) -> Result<Zval> {
+        Ok(self.inner)
+    }
+
+    fn set_zval(self, zv: &mut Zval, _persistent: bool) -> Result<()> {
+        let Self { inner } = self;
+        *zv = inner;
+        Ok(())
+    }
 }
 
 #[php_function]
@@ -69,7 +89,7 @@ pub fn hello_world(name: &str) -> String {
 }
 
 #[php_function]
-pub fn read_file(basedir: &str, path: &str, data: &mut Zval) -> String {
+pub fn read_file(basedir: &str, path: &str, twig_env: &mut Zval, data: &mut Zval) -> String {
     let basepath = PathBuf::from(basedir);
     let path = basepath.join(PathBuf::from(path));
     let mut template = match file_to_ast(&path) {
@@ -85,6 +105,12 @@ pub fn read_file(basedir: &str, path: &str, data: &mut Zval) -> String {
             Err(e) => return format!("error reading {} -> {}", parent_path.display(), e)
         };
     }
+    let mut callable = Zval::new();
+    callable.set_array(vec![twig_env.shallow_clone(), Zval::try_from("getFilter").unwrap()]).unwrap();
+    let mut filtercall = Zval::new();
+    filtercall.set_array(vec![call_user_func!(callable, "upper").unwrap(), Zval::try_from("getCallable").unwrap()]).unwrap();
+    let upper_filter = call_user_func!(filtercall).unwrap();
+    
     match template {
         Template::Module(mut module) => {
             module.apply_extensions(extensions);
@@ -95,7 +121,8 @@ pub fn read_file(basedir: &str, path: &str, data: &mut Zval) -> String {
                 basedir: basepath
             };
             module.render(&mut out, &mut env);
-            out
+            let arg_obj = ObjAsParamHack{inner: twig_env.shallow_clone()};
+            call_user_func!(dbg!(upper_filter), arg_obj, out.as_ref()).unwrap().string().unwrap_or_default()
         },
         Template::Extends(extends) => format!("what??? {}", extends.parent)
     }
@@ -114,16 +141,10 @@ fn parse(t: &str) -> IResult<&str, Template> {
         let mut root = extends;
         let (rest, (children, _)) = many_till(parse_content, nom::combinator::eof)(rest)?;
         for child in children.into_iter() {
-            match &child {
-                Content::Block(block) => {
-                    match &block.tag {
-                        BlockTag::BlockName(name) => {
-                            root.blocks.insert(name.to_string(), child);
-                        }
-                        _ => (),
-                    }
-                },
-                _ => ()
+            if let Content::Block(block) = &child {
+                if let BlockTag::BlockName(name) = &block.tag {
+                    root.blocks.insert(name.to_string(), child);
+                }
             }
         }
         return Ok((rest, Template::Extends(root)));
@@ -169,7 +190,6 @@ fn parse_block(t: &str) -> IResult<&str, Content> {
             Ok((rest, Content::Block(Box::new(Block {
                 children,
                 tag: blockTag,
-                parent: None
             }))))
         },
         BlockTag::BlockName(_) => {
@@ -177,14 +197,13 @@ fn parse_block(t: &str) -> IResult<&str, Content> {
             Ok((rest, Content::Block(Box::new(Block {
                 children,
                 tag: blockTag,
-                parent: None
             }))))
         }
         BlockTag::Include(_) => {
-            Ok((rest, Content::Block(Box::new(Block {children: Vec::default(), tag: blockTag, parent: None}))))
+            Ok((rest, Content::Block(Box::new(Block {children: Vec::default(), tag: blockTag}))))
         }
         BlockTag::Undefined => {
-            Ok((rest, Content::Block(Box::new(Block{children: Vec::default(), tag: blockTag, parent: None}))))
+            Ok((rest, Content::Block(Box::new(Block{children: Vec::default(), tag: blockTag}))))
         }
     }
 }
@@ -267,13 +286,6 @@ impl Block {
                 };
             }
             _=> ()}
-    }
-
-    fn block_name(&self) -> Option<String> {
-        match &self.tag {
-            BlockTag::BlockName(name) => Some(name.to_owned()),
-            _ => None
-        }
     }
 }
 

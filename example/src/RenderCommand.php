@@ -30,14 +30,17 @@ class RenderCommand extends Command
             'foo' => new foo(),
             'coll' => ['first', 'second', 'third'],
         ];
+
+        $twig = new Environment($loader,[]);
         $start = microtime(true);
-        for ($i = 0; $i < 10000; $i++) {
-//            $output->write(\read_file(__DIR__ . '/../Resources/views/test/','extend_extend_basic.html.twig', $data));
-            $twig = new Environment($loader,[]);
-            $template = $twig->load('extend_extend_basic.html.twig');
-            $output->write($template->render($data));
-        }
+//        for ($i = 0; $i < 10000; $i++) {
+            $output->write(\read_file(__DIR__ . '/../Resources/views/test/','extend_extend_basic.html.twig',$twig, $data));
+//            $twig = new Environment($loader,[]);
+//            $template = $twig->load('extend_extend_basic.html.twig');
+//            $output->write($template->render($data));
+//        }
         $end = microtime(true);
+        $output->writeln("");
         $output->writeln("Time: " . ($end - $start));
         return Command::SUCCESS;
     }
